@@ -272,7 +272,8 @@ Product addresses have the form `/p/<code>-<name-slug>`, for example `/p/s-1042-
 ### 6.6 Caching and speed
 
 - Media files have names that include a content hash and are served with a one-year cache lifetime, so Cloudflare and phones keep them.
-- Public pages are cached and refreshed when a product or setting changes, so a newly published product appears within seconds.
+- Public pages are built fresh from the local database on each visit, which takes a few milliseconds, so a newly published product appears at once. Whether Cloudflare also caches pages for a short time is decided at deployment.
+- Each photo also gets one JPEG of up to 1,200 pixels, used only for link previews in WhatsApp and Instagram, which do not reliably show WebP.
 - Admin pages are never cached.
 
 ### 6.7 Statistics

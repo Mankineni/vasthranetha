@@ -21,10 +21,13 @@
 - No brand name, domain or phone number in code. They come from settings or environment variables. Default brand name in the seed is `Boutique`.
 - Units in `src/lib/*` take `db: Db` as first parameter and never call `getDb()` themselves. Only `src/app/**` and `scripts/**` call `getDb()`.
 - Environment variables: `DATABASE_PATH` (default `./data/store.db`), `MEDIA_DIR` (default `./data/media`), `SITE_URL` (default `http://localhost:3000`), `ANTHROPIC_API_KEY` (optional). `data/` is git-ignored.
-- Photo display widths are exactly 480, 960, 1600, 2400 px on the long side, WebP quality 90. Photos are never enlarged. Originals are always kept.
+- Photo display widths are exactly 480, 960, 1600, 2400 px on the long side, WebP quality 90. Photos are never enlarged. Originals are always kept. One extra file per photo, a JPEG of at most 1200 px on the long side at quality 85, exists only for link previews (`og:image`), because chat apps do not reliably show WebP previews.
+- Identical uploads share files on disk. A file is removed only when no `media` row references it any more. All file removal goes through `deleteMediaRows` in `src/lib/media/store.ts`, which enforces this.
+- Public pages are rendered on every request (`export const dynamic = 'force-dynamic'` in the `(public)` layout). No page is prerendered at build time and there is no cache to refresh: a change in the database shows on the next page load, and the sold-visibility window moves with the clock.
 - Upload limits: photos JPEG/PNG/WebP up to 25 MB each, max 12 per product; video MP4 up to 20 MB, one per product. Type is detected from file content.
 - Listings page size is 24. Session length is 90 days. Sign-in lockout is 5 failures per login per 15 minutes. Unattached uploads are purged after 24 hours. Default sold-visibility window is 7 days.
-- After any change to products, taxonomy, settings or pages, call `refreshPublicSite()` so cached public pages update.
+- E2E tests run with one worker against one seeded database. A spec that changes data creates its own products, and restores any setting it changed in `afterAll`. Only `e2e/browse.spec.ts` and `e2e/product.spec.ts` may assert on seed counts.
+- Commands must work on Windows: no inline `VAR=value command`. Pass environment through `webServer.env` in Playwright or set it inside a `tsx` script.
 - TDD: write the failing test first, see it fail, implement, see it pass, commit. Commit after every task at minimum.
 - Before using a Next.js API you are not certain about (caching, `revalidatePath`, route handlers, metadata, manifest), read the docs for the installed version in `node_modules/next/dist/docs/` or the official site. Do not rely on memory.
 
@@ -69,13 +72,12 @@ src/
       guard.ts           requireOwner(), getOwner()
     stats/stats.ts       event counters and admin summary
     autofill/autofill.ts dealer text to suggested fields
-    refresh.ts           refreshPublicSite()
   app/
     (public)/            layout, home, listings, product, content pages, search
     admin/               login, home, products, settings, share
     media/[...path]/route.ts   serves files from MEDIA_DIR
     api/event/route.ts   records view / order tap
-    manifest.ts, sitemap.ts, robots.ts, not-found.tsx
+    sitemap.ts, robots.ts, not-found.tsx
   components/            shared UI (ProductCard, Gallery, OrderButton, ...)
 scripts/
   create-owner.ts        npm run create-owner
@@ -93,7 +95,7 @@ e2e/                     Playwright
 ### Task 1: Project scaffold, database and test harness
 
 **Files:**
-- Create: project root via `npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm` (answer No to anything else it asks)
+- Create: the app via `npx create-next-app@latest store-tmp --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm` (answer No to anything else it asks), run in the repo root. The repo folder is named `Boutique`, and npm rejects capital letters in package names, so scaffold into `store-tmp`, move everything in it (including dot-files, excluding its `.git`) up into the repo root, delete `store-tmp`, and set `"name": "boutique-store"` in `package.json`.
 - Create: `src/db/schema.ts`, `src/db/client.ts`, `src/db/migrate.ts`, `drizzle.config.ts`, `vitest.config.ts`, `tests/helpers/db.ts`, `tests/unit/db.test.ts`, `.env.example`
 - Modify: `package.json` (scripts), `.gitignore` (add `data/`, `.env`)
 
@@ -116,12 +118,12 @@ e2e/                     Playwright
 | `price_bands` | `id`, `label`, `min`, `max` (nullable = no upper limit), `position` |
 | `products` | `id`, `code` (unique), `slug`, `name`, `price`, `status` (`draft`/`available`/`sold`), `categoryId` → categories, `fabricId` (nullable) → fabrics, `length`, `blousePiece` (nullable boolean), `care`, `description`, `sizes` (JSON string array), `colours` (JSON string array), `dealerName`, `dealerCode`, `dealerPrice` (nullable int), `notes`, `submitToken` (nullable, unique), `createdBy`, `updatedBy` → users, `publishedAt` (nullable), `soldAt` (nullable), `createdAt`, `updatedAt` |
 | `product_occasions` | `productId` → products (cascade delete), `occasionId` → occasions, PK on both |
-| `media` | `id`, `productId` (nullable) → products, `batchId` (nullable text), `kind` (`photo`/`video`), `position`, `originalPath`, `width`, `height`, `variants` (JSON array of `{width, path}`), `createdAt` |
+| `media` | `id`, `productId` (nullable) → products, `batchId` (nullable text), `kind` (`photo`/`video`), `position`, `originalPath`, `width`, `height`, `variants` (JSON array of `{width, path}`), `previewPath` (nullable; the JPEG for link previews), `createdAt`. Deleting a product does not cascade to `media`. |
 | `settings` | `key` (PK), `value` (JSON text) |
 | `pages` | `slug` (PK), `title`, `body` |
 | `events` | `productId` → products (cascade delete), `type` (`view`/`order_tap`), `day` (`YYYY-MM-DD`), `count`; PK on (`productId`, `type`, `day`) |
 
-- [ ] **Step 1: Scaffold.** Run the `create-next-app` command above in the repo root (the `docs/` folder stays). Install: `npm i better-sqlite3 drizzle-orm sharp file-type @node-rs/argon2` and `npm i -D drizzle-kit vitest tsx @types/better-sqlite3`. Run `npm run dev`, confirm the default page loads at http://localhost:3000, stop it.
+- [ ] **Step 1: Scaffold.** Run the `create-next-app` command above and move the result into the repo root as described (the `docs/` folder stays). Install: `npm i better-sqlite3 drizzle-orm sharp file-type @node-rs/argon2` and `npm i -D drizzle-kit vitest tsx @types/better-sqlite3`. Run `npm run dev`, confirm the default page loads at http://localhost:3000, stop it.
 
 - [ ] **Step 2: Write the failing test** `tests/unit/db.test.ts`:
 
@@ -257,7 +259,7 @@ type ProductInput = {
 }
 type AdminProduct = ProductInput & { id: number; code: string; slug: string; status: ProductStatus;
   createdBy: number; updatedBy: number; publishedAt: number | null; soldAt: number | null; media: MediaItem[] }
-type MediaItem = { id: number; kind: 'photo' | 'video'; originalPath: string; width: number; height: number; variants: { width: number; path: string }[] }
+type MediaItem = { id: number; kind: 'photo' | 'video'; originalPath: string; width: number; height: number; variants: { width: number; path: string }[]; previewPath: string | null }
 
 // admin.ts
 validateProductInput(input: ProductInput, publish: boolean): string[]   // list of error messages, empty when valid
@@ -265,7 +267,7 @@ createProduct(db, input, userId, opts: { publish: boolean; now: number }): Admin
 updateProduct(db, id, input, userId, now): AdminProduct
 setStatus(db, id, status: ProductStatus, userId, now): void
 duplicateProduct(db, id, userId, now): AdminProduct     // new code, status draft, no media, name + ' (copy)'
-deleteProduct(db, id): string[]                          // returns file paths of its media for the caller to remove
+deleteProduct(db, id): void                              // deletes the product row only; throws if media rows still point at it (Task 10's deleteProductAndFiles removes those first)
 getAdminProduct(db, id): AdminProduct | null
 listAdminProducts(db, f: { q?: string; status?: ProductStatus }): AdminProduct[]   // newest first; q matches name (contains) or code (exact), case-insensitive
 ```
@@ -310,7 +312,8 @@ validateUpload(buf: Buffer): Promise<{ ok: true; kind: UploadKind; ext: 'jpg' | 
 // process.ts
 const DISPLAY_WIDTHS = [480, 960, 1600, 2400]
 const LOW_RES_LIMIT = 1200
-processPhoto(buf: Buffer): Promise<{ width: number; height: number; variants: { width: number; data: Buffer }[] }>
+processPhoto(buf: Buffer): Promise<{ width: number; height: number; variants: { width: number; data: Buffer }[]; preview: Buffer }>
+// preview: JPEG, long side min(1200, original), quality 85, for og:image only
 // width/height are after auto-orientation. "width" of a variant means its long side.
 
 // store.ts
@@ -318,12 +321,12 @@ savePhoto(db, buf: Buffer, opts: { batchId: string; mediaDir: string; now: numbe
 saveVideo(db, buf: Buffer, opts: { batchId: string; mediaDir: string; now: number }): Promise<MediaItem>
 saveSiteImage(buf: Buffer, mediaDir: string): Promise<{ path: string; variants: { width: number; path: string }[] }>  // logo, banner, tiles, customer photos; no media row
 listBatch(db, batchId: string): MediaItem[]
-removeFiles(paths: string[], mediaDir: string): Promise<void>      // ignores files already missing
-purgeUnattached(db, mediaDir: string, now: number): Promise<number> // media with productId null and createdAt older than 24 h; returns count
+deleteMediaRows(db, ids: number[], mediaDir: string): Promise<void> // deletes the rows, then removes each of their files that no remaining media row references; ignores files already missing
+purgeUnattached(db, mediaDir: string, now: number): Promise<number> // deleteMediaRows for media with productId null and createdAt older than 24 h; returns count
 mediaUrl(path: string): string                                      // '/media/' + path
 ```
 
-- Stored paths are relative to `mediaDir`: `<first 2 hex of sha256>/<sha256>-orig.<ext>` and `<sha256>-<width>.webp`.
+- Stored paths are relative to `mediaDir`: `<first 2 hex of sha256>/<sha256>-orig.<ext>`, `<sha256>-<width>.webp` and `<sha256>-og.jpg`.
 - `tests/helpers/images.ts`: `makeImage({ width, height, format: 'jpeg' | 'png' | 'webp', orientation?: number }): Promise<Buffer>` built with sharp.
 
 - [ ] **Step 1: Write the failing tests.** Use a temp directory per test. Required cases:
@@ -332,10 +335,12 @@ mediaUrl(path: string): string                                      // '/media/'
   - A 300×400 PNG yields exactly `[400]`.
   - A JPEG with EXIF orientation 6 comes out rotated: reported `width`/`height` are swapped relative to the raw pixel size.
   - `savePhoto` writes the original byte-for-byte (compare buffers) and returns `lowRes: true` for long side 1199, `false` for 1200.
-  - Saving the same bytes twice produces two media rows pointing at the same files, and deleting one row's product does not break the other (files are removed only when no row references them: put this rule in `removeFiles`' caller, `deleteProduct` flow in Task 10, and test it there).
+  - The preview is a JPEG with long side 1200 for a 3000×4000 source and 400 for a 300×400 source.
+  - Saving the same bytes twice produces two media rows pointing at the same files. `deleteMediaRows` on one of them leaves every file on disk; on the second it removes them all.
+  - Shared files survive a purge: the same bytes are saved twice, one row is attached to a product and the other left unattached for 25 hours; after `purgeUnattached` the unattached row is gone and the product's files are all still on disk.
   - **Review Focus 1:** `validateUpload` rejects a PDF buffer, a HEIC header, and a text file named as JPEG with the "not supported" reason; rejects a 26 MB JPEG and a 21 MB MP4 with the size reasons; accepts a PNG whatever its file name was.
   - `purgeUnattached` removes a 25-hour-old unattached row and its files, keeps a 23-hour-old one, keeps attached rows of any age.
-  - Route handler: `GET /media/<path>` returns the file with `Cache-Control: public, max-age=31536000, immutable` and the right `Content-Type`; a path containing `..` returns 404; a missing file returns 404.
+  - Route handler: `GET /media/<path>` returns the file with `Cache-Control: public, max-age=31536000, immutable` and the right `Content-Type`; a path containing `..` returns 404; a missing file returns 404. Responses carry `Accept-Ranges: bytes`; a request with `Range: bytes=0-99` returns status 206, exactly 100 bytes and a correct `Content-Range` (phones will not play or seek MP4 without this); an unsatisfiable range returns 416.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.** sharp pipeline per variant: `sharp(buf).rotate().resize({ width: w, height: w, fit: 'inside', withoutEnlargement: true }).toColourspace('srgb').webp({ quality: 90 })`. Variant list: every entry of `DISPLAY_WIDTHS` that is ≤ the long side, plus the long side itself when it is below 2400 and not already listed. `scripts/purge-uploads.ts` calls `purgeUnattached` with `Date.now()` and prints the count.
 - [ ] **Step 4: Run.** Expected: PASS.
@@ -387,14 +392,14 @@ relatedProducts(db, code: string, limit?: number): PublicCard[]  // same categor
 ### Task 7: Seed data, public layout, home and listing pages
 
 **Files:**
-- Create: `scripts/seed.ts`, `src/lib/refresh.ts`, `src/app/(public)/layout.tsx`, `src/app/(public)/page.tsx`, `src/app/(public)/c/[slug]/page.tsx`, `src/app/(public)/price/[id]/page.tsx`, `src/app/(public)/new/page.tsx`, `src/app/(public)/search/page.tsx`, `src/app/(public)/[page]/page.tsx`, `src/app/api/products/route.ts`, `src/components/{Header,Footer,WhatsAppFab,ProductCard,ProductGrid,FilterBar,ResponsiveImage}.tsx`, `playwright.config.ts`, `e2e/browse.spec.ts`
+- Create: `scripts/seed.ts`, `scripts/e2e-prepare.ts`, `src/app/(public)/layout.tsx`, `src/app/(public)/page.tsx`, `src/app/(public)/c/[slug]/page.tsx`, `src/app/(public)/price/[id]/page.tsx`, `src/app/(public)/new/page.tsx`, `src/app/(public)/search/page.tsx`, `src/app/(public)/[page]/page.tsx`, `src/app/api/products/route.ts`, `src/components/{Header,Footer,WhatsAppFab,ProductCard,ProductGrid,FilterBar,ResponsiveImage}.tsx`, `playwright.config.ts`, `e2e/browse.spec.ts`
 - Modify: `src/app/globals.css` (theme variables), `src/app/layout.tsx`, `package.json` (script `e2e`)
 - Delete: the scaffold's default home page content
 
 **Interfaces:**
 - Consumes: everything from Tasks 2 to 6
 - Produces:
-  - `refreshPublicSite(): void` → `revalidatePath('/', 'layout')`
+  - `scripts/e2e-prepare.ts`: deletes `./data/e2e.db*` and `./data/e2e-media`, then seeds that database and creates the test owner `owner@test.local` / `correct-horse-battery` (from Task 9 on). npm script `e2e` = `tsx scripts/e2e-prepare.ts && playwright test`, so data exists before the server starts and no open database file is ever deleted.
   - `GET /api/products?<ListQuery fields as query params>` → `{ items: PublicCard[]; total: number }` (used for "load more")
   - `<ResponsiveImage media={MediaItem} sizes="…" alt="…" priority? />` renders a plain `<img>` with `srcset` built from `variants` and `width`/`height` attributes set. Do not use `next/image`; the variants already exist.
   - `<ProductCard card={PublicCard} />`, `<ProductGrid initial={…} query={…} />` (client component; loads 24 more when the end of the list scrolls into view)
@@ -404,7 +409,7 @@ relatedProducts(db, code: string, limit?: number): PublicCard[]  // same categor
 
 **Design direction** (logo and colours are an open item; keep everything swappable through CSS variables in `globals.css`): warm off-white background, deep maroon accent, one serif display font for headings and one clean sans for text via `next/font/google`. Photos dominate: 3:4 tiles, small text, generous spacing. The fixed WhatsApp button uses WhatsApp green and sits bottom-right above the safe area.
 
-- [ ] **Step 1: Install Playwright** (`npm i -D @playwright/test`, `npx playwright install chromium`). Configure `playwright.config.ts`: `webServer` runs `npm run build && npm run start` with `DATABASE_PATH=./data/e2e.db MEDIA_DIR=./data/e2e-media`, a `globalSetup` that deletes those and runs the seed, one project using the `Pixel 7` device.
+- [ ] **Step 1: Install Playwright** (`npm i -D @playwright/test`, `npx playwright install chromium`). Configure `playwright.config.ts`: `workers: 1`, `fullyParallel: false`; `webServer.command` = `npm run build && npm run start`, `webServer.env` = `{ DATABASE_PATH: './data/e2e.db', MEDIA_DIR: './data/e2e-media', SITE_URL: 'http://localhost:3000' }`, `reuseExistingServer: false`; one project using the `Pixel 7` device. No `globalSetup`: `scripts/e2e-prepare.ts` does the preparation.
 
 - [ ] **Step 2: Write the failing e2e test** `e2e/browse.spec.ts`:
   - Home shows the brand name, at least 8 product cards under "New arrivals", both category tiles, three price band links, the three "how ordering works" steps.
@@ -440,12 +445,13 @@ relatedProducts(db, code: string, limit?: number): PublicCard[]  // same categor
   - A sold product shows "Sold", has no order button, and has a link with text "Ask for something similar on WhatsApp".
   - "More like this" lists up to 8 products, none sold, none the current product.
   - **Review Focus 5:** `/p/<code>-wrong-name` and `/p/<CODE IN UPPER CASE>` both end on the canonical path (permanent redirect); the path of a draft's code and `/p/s-999999` return status 404 and show a link to `/new`.
-  - The page `<head>` has `og:title` = product name, `og:image` = absolute URL of the cover's 960-wide variant (or its largest when smaller), `og:description` containing the formatted price, and a JSON-LD `Product` block with `sku` = code, `offers.priceCurrency` = `INR`, `offers.availability` = `InStock` or `SoldOut`.
+  - The page `<head>` has `og:title` = product name, `og:image` = absolute URL of the cover's `previewPath` (a `.jpg`), with `og:image:width` and `og:image:height`, `og:description` containing the formatted price, and a JSON-LD `Product` block with `sku` = code, `offers.priceCurrency` = `INR`, `offers.availability` = `InStock` or `SoldOut`.
   - `/sitemap.xml` lists the home page, every category page and every available product, and no draft.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.** Gallery uses CSS scroll-snap for swiping (no carousel library). The zoom viewer supports pinch and double-tap zoom on the 2400 variant. Video renders as `<video controls playsinline preload="metadata" poster=…>` after the photos. `ShareButton` uses `navigator.share` and falls back to copying the link.
 - [ ] **Step 4: Run** `npm run e2e`. Expected: PASS. Check the page by eye at 360 px.
-- [ ] **Step 5: Commit** `feat: product page with WhatsApp ordering, previews and sitemap`.
+- [ ] **Step 5: Judge quality on real photos.** Ask the user for 5 to 10 product photos exactly as received over WhatsApp. Add them as products (a small `tsx` script calling `savePhoto` and `createProduct` is enough at this stage), then compare original and display versions on a phone screen and at full zoom, looking hardest at saturated reds and maroons and at gold zari. If colour edges look smeared, set `smartSubsample: true` in the WebP options, re-check, and keep whichever looks better. Report what was found to the user.
+- [ ] **Step 6: Commit** `feat: product page with WhatsApp ordering, previews and sitemap`.
 
 **Milestone: this is the first version to show the partners (spec build step 1).**
 
@@ -477,7 +483,7 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
 - `npm run create-owner -- --name "…" --login "…"` prompts for the password without echo.
 
 - [ ] **Step 1: Write the failing unit tests:** correct password signs in; wrong password and unknown login both return `invalid`; the 6th attempt within 15 minutes after 5 failures returns `locked` even with the right password; after 15 minutes it works again; a successful sign-in does not clear another login's failures; a session is valid at 89 days and `null` at 91; `signOut` invalidates it; the `sessions` table never contains the raw token; login match is case-insensitive.
-- [ ] **Step 2: Write the failing e2e test:** `/admin` and `/admin/products` redirect to `/admin/login` when signed out; signing in with an owner created in `globalSetup` (`owner@test.local` / `correct-horse-battery`) lands on `/admin`; a wrong password shows "Wrong login or password."; after logout `/admin` redirects again; `/admin/login` responds with `Cache-Control` containing `no-store`.
+- [ ] **Step 2: Write the failing e2e test:** `/admin` and `/admin/products` redirect to `/admin/login` when signed out; signing in with the test owner created by `scripts/e2e-prepare.ts` (`owner@test.local` / `correct-horse-battery`; add that to the script in this task) lands on `/admin`; a wrong password shows "Wrong login or password."; after logout `/admin` redirects again; `/admin/login` responds with `Cache-Control` containing `no-store`.
 - [ ] **Step 3: Run both.** Expected: FAIL.
 - [ ] **Step 4: Implement.** The `(app)` layout calls `requireOwner()` and sets `export const dynamic = 'force-dynamic'`. Add `<meta name="robots" content="noindex">` to all admin pages and `Disallow: /admin` to `robots.ts`.
 - [ ] **Step 5: Run** `npm test` and `npm run e2e`. Expected: PASS.
@@ -492,11 +498,11 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
 - Test: `tests/unit/product-actions.test.ts`, `e2e/admin-product.spec.ts`
 
 **Interfaces:**
-- Consumes: `requireOwner`, `validateUpload`, `savePhoto`, `saveVideo`, `listBatch`, `removeFiles`, `createProduct`, `updateProduct`, `getAdminProduct`, `validateProductInput`, taxonomy lists, `refreshPublicSite`
+- Consumes: `requireOwner`, `validateUpload`, `savePhoto`, `saveVideo`, `listBatch`, `deleteMediaRows`, `createProduct`, `updateProduct`, `deleteProduct`, `getAdminProduct`, `validateProductInput`, taxonomy lists
 - Produces:
   - `POST /admin/upload` (multipart: one `file`, one `batchId`) → `200 { media: MediaItem; lowRes: boolean }` or `400 { error: string }` (the `validateUpload` reason) or `401`.
   - Server actions `saveProduct(formData): Promise<{ errors: string[] } | never>` (redirects to `/admin/products` on success) and `removeProduct(id)`.
-  - `deleteProductAndFiles(db, id, mediaDir): Promise<void>` in `actions.ts`' helper module `src/lib/catalogue/remove.ts`: deletes the product, then removes only files no other media row references.
+  - `deleteProductAndFiles(db, id, mediaDir): Promise<void>` in `src/lib/catalogue/remove.ts`: calls `deleteMediaRows` for the product's media, then `deleteProduct`.
   - `/admin/products/new?batch=<id>` opens the form with that batch's uploads already shown (used by Task 12). Without `batch`, the page generates a new batch id.
   - Form field `data-testid`s: `name`, `price`, `category`, `dealer-price`, `margin`, `publish`, `save-draft`, `photo-input`, `photo-<index>`, `lowres-warning`.
 
@@ -508,7 +514,7 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
   - Publish with no photo shows "Add at least one photo." and stays on the form with the typed values intact.
   - Save as draft with only a name, price and category succeeds; the product is absent from the public site.
   - **Review Focus 4:** double-clicking Publish creates exactly one product.
-  - Edit: change the price; the public page shows the new price after a reload (proves `refreshPublicSite`).
+  - Edit: change the price; the public page shows the new price after a reload.
   - `POST /admin/upload` without a session returns 401.
 - [ ] **Step 3: Run.** Expected: FAIL.
 - [ ] **Step 4: Implement.** Each chosen file uploads on its own request with a per-file progress state (uploading, done, failed with Retry and Remove); a failure never clears other fields. The form carries a hidden `submitToken` generated on page load and the ordered `mediaIds`. The Publish and Save buttons disable while the action runs. Photo reordering: drag handle plus "Make cover" and left/right buttons (touch drag is unreliable; the buttons are the dependable path). Private dealer fields sit in a section titled "Private (only you see this)". Inputs use `inputMode="numeric"` for prices.
@@ -525,7 +531,7 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
 - Test: `e2e/admin-list.spec.ts`
 
 **Interfaces:**
-- Consumes: `listAdminProducts`, `setStatus`, `duplicateProduct`, `deleteProductAndFiles`, `productPath`, `refreshPublicSite`
+- Consumes: `listAdminProducts`, `setStatus`, `duplicateProduct`, `deleteProductAndFiles`, `productPath`
 - Produces: `/admin/products?status=<available|sold|draft>&q=<text>`; row `data-testid="row-<code>"` with controls `mark-sold`, `mark-available`, `edit`, `duplicate`, `delete`, `copy-link`, `share`.
 
 - [ ] **Step 1: Write the failing e2e test:** the list shows cover, name, code, price and status for seeded products; the Sold tab shows only sold ones; searching a code shows one row; Mark sold on an available product makes its public page show "Sold", and Mark available again restores the order button; Duplicate opens the edit form of a new draft named "<name> (copy)" with no photos and a different code; Delete asks "Delete this product? This cannot be undone." and after confirming the row is gone and the public path returns 404; Copy link puts the absolute public URL on the clipboard.
@@ -541,32 +547,35 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
 ### Task 12: Installable admin app and share from WhatsApp
 
 **Files:**
-- Create: `src/app/manifest.ts`, `src/app/admin/share/route.ts`, `public/sw.js`, `public/icons/{icon-192,icon-512,icon-maskable-512}.png` (generated with sharp from a simple maroon monogram), `src/components/admin/RegisterServiceWorker.tsx`
+- Create: `src/app/admin/manifest.webmanifest/route.ts`, `src/app/admin/sw.js/route.ts`, `src/app/admin/share/route.ts`, `src/app/admin/layout.tsx` (wraps login and `(app)`; links the manifest), `public/icons/{icon-192,icon-512,icon-maskable-512}.png` (generated with sharp from a simple maroon monogram), `src/components/admin/RegisterServiceWorker.tsx`
 - Modify: `src/app/admin/(app)/layout.tsx` (register the service worker)
+
+The manifest and service worker belong to the admin only. Public pages must not link the manifest, so customers are never offered an "Admin" app to install.
 - Test: `tests/unit/share-route.test.ts`, `e2e/share.spec.ts`
 
 **Interfaces:**
 - Consumes: `getOwner`, `validateUpload`, `savePhoto`, `saveVideo`
 - Produces:
-  - Manifest: `name` and `short_name` from settings brand name + " Admin", `start_url: '/admin'`, `scope: '/'`, `display: 'standalone'`, the three icons, and
+  - Manifest at `/admin/manifest.webmanifest` (`Content-Type: application/manifest+json`): `name` and `short_name` from settings brand name + " Admin", `id: '/admin/'`, `start_url: '/admin'`, `scope: '/admin/'`, `display: 'standalone'`, the three icons, and
 
     ```json
     "share_target": { "action": "/admin/share", "method": "POST", "enctype": "multipart/form-data",
       "params": { "files": [{ "name": "files", "accept": ["image/*", "video/mp4"] }] } }
     ```
   - `POST /admin/share`: with a session, saves every valid file under a new batch id and responds `303` to `/admin/products/new?batch=<id>&rejected=<n>` (`rejected` only when n > 0); without a session responds `303` to `/admin/login?next=share`.
-  - `public/sw.js`: a minimal service worker with a `fetch` listener that passes requests through (needed for installability). No offline caching.
+  - `/admin/sw.js` (`Content-Type: text/javascript`, `Cache-Control: no-cache`): a minimal service worker with a `fetch` listener that passes requests through (needed for installability), registered with scope `/admin/`. No offline caching.
 
 - [ ] **Step 1: Write the failing tests.**
   - Unit (call the route handler function directly with a `FormData` request and a stubbed owner): three valid images → 303 with a `batch` param, and `listBatch` returns 3 items in the order sent; **Review Focus 1:** two images plus a PDF → 2 items and `rejected=1`; more than 12 photos → first 12 kept, rest counted as rejected; no session → redirect to login and nothing stored.
-  - e2e: `/manifest.webmanifest` contains the `share_target` block above; a multipart POST to `/admin/share` from a signed-in browser context with `big.jpg` lands on the new-product form showing one photo; with `rejected=1` the form shows "1 file could not be used (unsupported type or too large)."; the login page with `next=share` shows "Please sign in, then share the photos again."
+  - e2e: `/admin/manifest.webmanifest` contains the `share_target` block above and `scope: '/admin/'`; the public home page HTML has no `rel="manifest"` link while `/admin/login` has one; a multipart POST to `/admin/share` from a signed-in browser context with `big.jpg` lands on the new-product form showing one photo; with `rejected=1` the form shows "1 file could not be used (unsupported type or too large)."; the login page with `next=share` shows "Please sign in, then share the photos again."
 - [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.** Check the installed Next.js docs for the manifest file convention and whether extra keys such as `share_target` pass through its type; if the typed route rejects it, serve the manifest from a route handler at `src/app/manifest.webmanifest/route.ts` instead and link it in the root layout.
+- [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `npm test` and `npm run e2e`. Expected: PASS.
-- [ ] **Step 5: Write** `docs/android-share-check.md`: the manual check for a real phone (open the site over HTTPS, install from Chrome's menu, share 3 photos from a WhatsApp chat, confirm the form opens with them, publish, paste the product link into a chat and confirm the preview shows). This check runs after deployment, since install and share need HTTPS on a real domain.
-- [ ] **Step 6: Commit** `feat: installable admin app and share target`.
+- [ ] **Step 5: Write** `docs/android-share-check.md`: the manual check for a real phone (open the site over HTTPS, sign in, install from Chrome's menu, share 3 photos from a WhatsApp chat, confirm the store app appears in the share list and the form opens with the photos, publish, paste the product link into a chat and confirm the preview shows the photo).
+- [ ] **Step 6: Real-phone check through a temporary tunnel.** Install and share need HTTPS, and this flow is what the whole design rests on, so it is checked now and not left to deployment. Ask the user before starting: with their agreement, run the production build locally with `SITE_URL` set to the tunnel address, expose it with a temporary HTTPS tunnel (for example `npx cloudflared tunnel --url http://localhost:3000`), and have the user follow `docs/android-share-check.md` on one of the Android phones. Confirm in particular that the share lands on the form while signed in (the session cookie is sent with the share POST). Close the tunnel afterwards. If the user prefers to wait, record the check as pending in the deployment plan.
+- [ ] **Step 7: Commit** `feat: installable admin app and share target`.
 
-**Milestone: spec build step 3 complete (real-phone check pending deployment).**
+**Milestone: spec build step 3 complete.**
 
 ---
 
@@ -577,10 +586,10 @@ requireOwner(): Promise<{ id: number; name: string }>      // redirects to /admi
 - Test: `e2e/admin-settings.spec.ts`
 
 **Interfaces:**
-- Consumes: `getSettings`, `updateSettings`, taxonomy functions, `getPage`, `savePage`, `saveSiteImage`, `refreshPublicSite`, `requireOwner`
+- Consumes: `getSettings`, `updateSettings`, taxonomy functions, `getPage`, `savePage`, `saveSiteImage`, `requireOwner`
 - Produces: settings screens for every item in spec 4.5.
 
-- [ ] **Step 1: Write the failing e2e test:** changing the brand name and tagline changes the public header; uploading a banner shows it on the home page; entering `98765 43210` as the WhatsApp number saves, and the public order link then starts `https://wa.me/919876543210`; entering `12345` shows "Enter a valid Indian mobile number." and keeps the old number; clearing the number hides all WhatsApp buttons on the public site and (after Task 14) is flagged on the admin home; adding category "Kurtis" with prefix `K` adds a tile on the home page and an option in the product form; deleting "Sarees" shows "Sarees is used by products and cannot be deleted."; adding a fabric makes it appear in the public filter; replacing the price bands changes the home page bands; setting sold-visible days to 0 removes a product sold 2 days ago from listings; editing the About text changes `/about`; adding a customer photo shows it on the home page.
+- [ ] **Step 1: Write the failing e2e test.** This spec changes shared settings and lists: it creates the products it needs, never deletes seeded rows, and puts every setting and list back in `afterAll`. Cases: changing the brand name and tagline changes the public header; uploading a banner shows it on the home page; entering `98765 43210` as the WhatsApp number saves, and the public order link then starts `https://wa.me/919876543210`; entering `12345` shows "Enter a valid Indian mobile number." and keeps the old number; clearing the number hides all WhatsApp buttons on the public site and (after Task 14) is flagged on the admin home; adding category "Kurtis" with prefix `K` adds a tile on the home page and an option in the product form; deleting "Sarees" shows "Sarees is used by products and cannot be deleted."; adding a fabric makes it appear in the public filter; replacing the price bands changes the home page bands; setting sold-visible days to 0 removes a product sold 2 days ago from listings; editing the About text changes `/about`; adding a customer photo shows it on the home page.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.** Category prefix input accepts 1 to 3 letters and upper-cases them; a duplicate category or list name shows an error.
 - [ ] **Step 4: Run.** Expected: PASS.
@@ -660,7 +669,7 @@ applySuggestion(current: FormValues, s: Suggestion): FormValues    // fills only
 
 - [ ] **Step 1: Write** `e2e/privacy.spec.ts`: as an owner, create a product with dealer name `ZZDEALER`, dealer code `ZZCODE`, dealer price `777123`, notes `ZZNOTE`. Signed out, fetch `/`, `/new`, its category page, its product page, `/search?q=<code>`, `/api/products`, `/sitemap.xml`; none of the response bodies contains any of the four values. Fetch every `/admin/...` page path and `POST` every admin route handler (`/admin/upload`, `/admin/share`, `/admin/autofill`) signed out; each redirects to login or returns 401.
 - [ ] **Step 2: Write** `e2e/journey.spec.ts`: one end-to-end run of spec section 7's owner and customer journeys (sign in, add with two photos, publish, find it under New arrivals, open it, order link correct, mark sold, public page shows Sold).
-- [ ] **Step 3: Run** `npm test`, `npm run e2e`, `npm run lint`, `npm run build`. Expected: all pass with no warnings about dynamic server usage on public pages.
+- [ ] **Step 3: Run** `npm test`, `npm run e2e`, `npm run lint`, `npm run build`. Expected: all pass, and the build output lists every public page as dynamic (none prerendered).
 - [ ] **Step 4: Measure** the built home page and a product page with Chrome's Lighthouse (mobile preset) against `npm run start`. Target: performance 90 or above, no image without `width`/`height`, largest contentful paint image marked `priority`. Fix what misses.
 - [ ] **Step 5: Write** `README.md`: what the project is, how to run it locally (`npm i`, `npm run seed`, `npm run create-owner`, `npm run dev`), the environment variables, the test commands, and that deployment is covered by a separate plan.
 - [ ] **Step 6: Commit** `test: privacy and full-journey checks, readme`.

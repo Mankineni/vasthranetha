@@ -9,6 +9,7 @@ import {
   duplicateProduct,
   getAdminProduct,
   listAdminProducts,
+  productIdsByCode,
   setStatus,
   updateProduct,
   validateProductInput,
@@ -172,6 +173,13 @@ test('deleteProduct refuses while media are attached, then deletes', () => {
   db.delete(media).where(eq(media.id, m)).run()
   deleteProduct(db, p.id)
   expect(getAdminProduct(db, p.id)).toBeNull()
+})
+
+test('productIdsByCode maps codes to ids and skips unknown codes', () => {
+  const { db, sarees, user } = setup()
+  const a = createProduct(db, makeInput(sarees), user, { publish: false, now: 1 })
+  expect(productIdsByCode(db, [a.code, 'S-999999'])).toEqual(new Map([[a.code, a.id]]))
+  expect(productIdsByCode(db, [])).toEqual(new Map())
 })
 
 test('listAdminProducts returns at most `limit` rows, newest first, and counts every status', () => {

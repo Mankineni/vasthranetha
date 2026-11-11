@@ -12,6 +12,7 @@ import { Gallery } from '@/components/Gallery'
 import { OrderPanel } from '@/components/OrderPanel'
 import { ProductCard } from '@/components/ProductCard'
 import { ShareButton } from '@/components/ShareButton'
+import { TrackView } from '@/components/TrackView'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -98,6 +99,7 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="mx-auto w-full max-w-6xl pb-12 sm:px-4 sm:pt-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
+      <TrackView code={p.code} />
       <nav aria-label="Breadcrumb" className="hidden px-4 pb-3 text-xs text-muted sm:block sm:px-0">
         <Link href="/">Home</Link> / <Link href={`/c/${p.category.slug}`}>{p.category.name}</Link>
       </nav>

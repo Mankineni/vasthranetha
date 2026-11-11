@@ -271,6 +271,12 @@ export function getAdminProduct(db: Db, id: number): AdminProduct | null {
   return row ? hydrate(db, [row])[0] : null
 }
 
+export function productIdsByCode(db: Db, codes: string[]): Map<string, number> {
+  if (!codes.length) return new Map()
+  const rows = db.select({ id: products.id, code: products.code }).from(products).where(inArray(products.code, codes)).all()
+  return new Map(rows.map((r) => [r.code, r.id]))
+}
+
 export function countByStatus(db: Db): Record<ProductStatus | 'all', number> {
   const rows = db.select({ status: products.status, n: sql<number>`count(*)` }).from(products).groupBy(products.status).all()
   const counts = { all: 0, draft: 0, available: 0, sold: 0 }

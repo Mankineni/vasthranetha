@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { sendEvent } from '@/lib/stats/beacon'
 import { buildOrderMessage, buildSimilarMessage, buildWhatsAppLink } from '@/lib/whatsapp/message'
 import { WhatsAppIcon } from './WhatsAppIcon'
 
@@ -85,6 +86,7 @@ export function OrderPanel({ number, product, url }: Props) {
           href={href}
           target="_blank"
           rel="noopener"
+          onClick={() => sendEvent(product.code, 'order_tap')}
           data-testid="order-button"
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-whatsapp px-5 py-3.5 text-center font-medium text-white shadow-sm"
         >

@@ -23,6 +23,8 @@ export default async function NewProductPage({ searchParams }: Props) {
   const batch = first(params.batch)
   const shared = batch && /^[A-Za-z0-9-]{8,64}$/.test(batch) ? listBatch(db, batch) : []
   const rejected = Number(first(params.rejected) ?? 0)
+  const sharedRaw = first(params.shared)
+  const sharedId = sharedRaw && /^[0-9a-f-]{36}$/.test(sharedRaw) ? sharedRaw : undefined
 
   return (
     <div>
@@ -38,6 +40,7 @@ export default async function NewProductPage({ searchParams }: Props) {
           batchId={batch && shared.length ? batch : randomUUID()}
           submitToken={randomUUID()}
           rejected={Number.isInteger(rejected) && rejected > 0 ? rejected : 0}
+          sharedId={sharedId}
           {...options}
         />
       )}

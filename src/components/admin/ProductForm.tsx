@@ -22,6 +22,8 @@ type Props = {
   occasions: Option[]
   /** Files a share could not use (unsupported type or too large). */
   rejected?: number
+  /** A share kept on the phone by the service worker. */
+  sharedId?: string
 }
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', 'XXL']
@@ -124,7 +126,7 @@ export function ProductForm(props: Props) {
 
       <section>
         <h2 className="mb-2 font-display text-xl font-semibold">Photos</h2>
-        <PhotoPicker items={items} onChange={setItems} batchId={props.batchId} />
+        <PhotoPicker items={items} onChange={setItems} batchId={props.batchId} sharedId={props.sharedId} />
       </section>
 
       <section className="space-y-4">

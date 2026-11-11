@@ -14,6 +14,7 @@ export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams
   const rawNext = Array.isArray(params.next) ? params.next[0] : params.next
   const fromShare = rawNext === 'share'
+  const fromKeptShare = Boolean(rawNext?.startsWith('/admin/share/received'))
   const next = await safeNext(rawNext)
   if (await getOwner()) redirect(next)
 
@@ -25,6 +26,11 @@ export default async function LoginPage({ searchParams }: Props) {
       {fromShare && (
         <p className="mt-6 rounded-md bg-accent-soft px-3 py-2 text-sm text-ink">
           Please sign in, then share the photos again.
+        </p>
+      )}
+      {fromKeptShare && (
+        <p className="mt-6 rounded-md bg-accent-soft px-3 py-2 text-sm text-ink">
+          Please sign in. Your shared photos will be added after you sign in.
         </p>
       )}
       <LoginForm next={next} />

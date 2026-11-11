@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MAX_PHOTOS, MAX_VIDEOS, type MediaItem } from '@/lib/catalogue/types'
 import { variantAtLeast } from '@/lib/media/urls'
+import { readSharedFiles } from './sharedFiles'
 
 export type PhotoItem = {
   key: string
@@ -26,6 +27,8 @@ type Props = {
   items: PhotoItem[]
   onChange: (update: (items: PhotoItem[]) => PhotoItem[]) => void
   batchId: string
+  /** Id of a share the service worker kept on the phone; its files are added on open. */
+  sharedId?: string
 }
 
 let keySeq = 0
@@ -57,11 +60,26 @@ async function uploadFile(file: File, batchId: string): Promise<Partial<PhotoIte
   }
 }
 
-export function PhotoPicker({ items, onChange, batchId }: Props) {
+export function PhotoPicker({ items, onChange, batchId, sharedId }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const queue = useRef<Promise<void>>(Promise.resolve())
   const [notice, setNotice] = useState<string | null>(null)
   const shown = displayOrder(items)
+
+  useEffect(() => {
+    if (!sharedId) return
+    let cancelled = false
+    readSharedFiles(sharedId).then(({ files, discard }) => {
+      if (cancelled) return
+      if (files.length) add(files)
+      else setNotice('The shared photos were not found on this phone. Please share them again.')
+      void discard()
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the share that opened the form
+  }, [sharedId])
 
   const update = (key: string, patch: Partial<PhotoItem>) =>
     onChange((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)))
@@ -74,7 +92,7 @@ export function PhotoPicker({ items, onChange, batchId }: Props) {
     })
   }
 
-  function add(files: FileList | null) {
+  function add(files: FileList | File[] | null) {
     if (!files?.length) return
     const live = items.filter((i) => i.status !== 'failed')
     let photos = live.filter((i) => i.kind === 'photo').length

@@ -11,13 +11,19 @@ type Props = { photos: MediaItem[]; video: MediaItem | null; name: string; sold:
 /** Swipeable photos (CSS scroll-snap, no carousel library). Tap a photo to open the zoom viewer. */
 export function Gallery({ photos, video, name, sold }: Props) {
   const [current, setCurrent] = useState(0)
+  // Photos up to this index are loaded: the first two at once, the rest one ahead of the swipe.
+  // (Browsers treat side-scrolled images as nearly visible, so lazy loading alone loads them all.)
+  const [reach, setReach] = useState(1)
   const [zoomAt, setZoomAt] = useState<number | null>(null)
   const track = useRef<HTMLDivElement>(null)
   const slides = photos.length + (video ? 1 : 0)
 
   function onScroll() {
     const el = track.current
-    if (el) setCurrent(Math.round(el.scrollLeft / el.clientWidth))
+    if (!el) return
+    const index = Math.round(el.scrollLeft / el.clientWidth)
+    setCurrent(index)
+    setReach((r) => Math.max(r, index + 1))
   }
 
   function scrollTo(i: number) {
@@ -44,13 +50,15 @@ export function Gallery({ photos, video, name, sold }: Props) {
             aria-label={`Zoom photo ${i + 1} of ${photos.length}`}
             className="relative aspect-[3/4] w-full shrink-0 snap-center snap-always cursor-zoom-in"
           >
-            <ResponsiveImage
-              media={m}
-              alt={i === 0 ? name : `${name}, photo ${i + 1}`}
-              sizes="(min-width: 1024px) 55vw, 100vw"
-              priority={i === 0}
-              className={`h-full w-full object-cover ${sold ? 'opacity-70' : ''}`}
-            />
+            {i <= reach && (
+              <ResponsiveImage
+                media={m}
+                alt={i === 0 ? name : `${name}, photo ${i + 1}`}
+                sizes="(min-width: 1024px) 55vw, 100vw"
+                priority={i === 0}
+                className={`h-full w-full object-cover ${sold ? 'opacity-70' : ''}`}
+              />
+            )}
           </button>
         ))}
         {video && (

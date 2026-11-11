@@ -62,11 +62,10 @@ export async function removeProduct(id: number): Promise<void> {
   revalidatePath('/admin/products')
 }
 
-async function changeStatus(id: number, status: 'available' | 'sold'): Promise<{ error: string | null }> {
-  const owner = await requireOwner()
+async function changeStatus(ownerId: number, id: number, status: 'available' | 'sold'): Promise<{ error: string | null }> {
   if (!Number.isInteger(id)) return { error: 'Unknown product.' }
   try {
-    setStatus(getDb(), id, status, owner.id, Date.now())
+    setStatus(getDb(), id, status, ownerId, Date.now())
   } catch (err) {
     if (err instanceof ProductError) return { error: err.message }
     throw err
@@ -76,11 +75,13 @@ async function changeStatus(id: number, status: 'available' | 'sold'): Promise<{
 }
 
 export async function markSold(id: number) {
-  return changeStatus(id, 'sold')
+  const owner = await requireOwner()
+  return changeStatus(owner.id, id, 'sold')
 }
 
 export async function markAvailable(id: number) {
-  return changeStatus(id, 'available')
+  const owner = await requireOwner()
+  return changeStatus(owner.id, id, 'available')
 }
 
 /** Copies a product (without photos) as a new draft and opens it. */

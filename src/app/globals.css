@@ -12,7 +12,8 @@
   --accent-ink: #ffffff;
   --accent-soft: #f4e6e3;
   --gold: #b48a3c;
-  --whatsapp: #1fa855;
+  /* A deeper WhatsApp green: white text on it, and it as text on --bg, both pass 4.5:1 contrast. */
+  --whatsapp: #147d3f;
   --danger: #b42318;
 }
 

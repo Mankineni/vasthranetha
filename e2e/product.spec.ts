@@ -24,7 +24,16 @@ test('saree page shows name, price, code, details and every photo', async ({ pag
   await expect(details).toContainText('Soft silk')
   await expect(details).toContainText('6.3 m')
   await expect(details).toContainText('Blouse piece')
-  await expect(page.getByTestId('gallery').locator('img')).toHaveCount(p.photos)
+  await expect(page.getByTestId('gallery').getByRole('button', { name: /^Zoom photo/ })).toHaveCount(p.photos)
+})
+
+test('the gallery loads two photos up front and the rest while swiping', async ({ page }) => {
+  const p = seedProduct(SAREE) // 4 photos
+  await page.goto(pathOf(SAREE))
+  const gallery = page.getByTestId('gallery')
+  await expect(gallery.locator('img')).toHaveCount(2)
+  await gallery.evaluate((el) => el.scrollTo({ left: el.scrollWidth }))
+  await expect(gallery.locator('img')).toHaveCount(p.photos)
 })
 
 test('empty detail fields render no label', async ({ page }) => {

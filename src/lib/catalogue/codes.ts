@@ -21,6 +21,12 @@ export function productPath(p: { code: string; slug: string }): string {
   return p.slug ? `/p/${code}-${p.slug}` : `/p/${code}`
 }
 
+/** A search that looks like a product code ("S1042", "s 1042", "S-1042") in stored form, else null. */
+export function normaliseCodeQuery(q: string): string | null {
+  const m = /^\s*([a-z]{1,3})[\s-]*(\d+)\s*$/i.exec(q)
+  return m ? `${m[1].toUpperCase()}-${m[2]}` : null
+}
+
 export function parseProductPath(segment: string): { code: string } | null {
   const m = /^([a-z]{1,3})-(\d+)(-.*)?$/i.exec(segment)
   return m ? { code: `${m[1].toUpperCase()}-${m[2]}` } : null

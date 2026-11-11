@@ -1,7 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
 import { savePageText, type ActionResult } from '@/app/admin/(app)/settings/actions'
+import { useSafeForm } from '../safeAction'
 import { ErrorText, inputClass, Saved } from './ui'
 
 type Props = { slug: string; heading: string; title: string; body: string }
@@ -9,9 +9,9 @@ type Props = { slug: string; heading: string; title: string; body: string }
 const start: ActionResult = { ok: false, error: null, version: 0 }
 
 export function PageTextForm({ slug, heading, title, body }: Props) {
-  const [state, action, pending] = useActionState(savePageText.bind(null, slug), start)
+  const { state, onSubmit, pending } = useSafeForm(savePageText.bind(null, slug), start)
   return (
-    <form data-testid={`page-${slug}`} action={action} className="space-y-3 rounded-lg border border-line bg-surface p-4">
+    <form data-testid={`page-${slug}`} onSubmit={onSubmit} className="space-y-3 rounded-lg border border-line bg-surface p-4">
       <h2 className="font-display text-xl font-semibold">{heading}</h2>
       <label className="block">
         <span className="text-sm">Title</span>

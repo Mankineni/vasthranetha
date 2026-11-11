@@ -1,11 +1,11 @@
 'use client'
 
-import { useActionState } from 'react'
 import { saveBrand, type BrandState } from '@/app/admin/(app)/settings/actions'
+import { useSafeForm } from '../safeAction'
 import { ErrorText, inputClass, Saved } from './ui'
 
 export function BrandForm({ initial }: { initial: BrandState['values'] }) {
-  const [state, action, pending] = useActionState<BrandState, FormData>(saveBrand, {
+  const { state, onSubmit, pending } = useSafeForm<BrandState>(saveBrand, {
     ok: false,
     error: null,
     version: 0,
@@ -15,7 +15,7 @@ export function BrandForm({ initial }: { initial: BrandState['values'] }) {
 
   return (
     // Remount after each successful save so the fields show the stored (normalised) values.
-    <form key={state.version} action={action} className="space-y-4">
+    <form key={state.version} onSubmit={onSubmit} className="space-y-4">
       <label className="block">
         <span className="text-sm font-medium">Brand name</span>
         <input name="brandName" defaultValue={v.brandName} required maxLength={80} className={inputClass} />
@@ -42,7 +42,7 @@ export function BrandForm({ initial }: { initial: BrandState['values'] }) {
         <span className="mt-1 block text-xs text-muted">0 hides sold products from listings straight away. Their pages keep working.</span>
       </label>
       <ErrorText error={state.error} />
-      <Saved show={state.ok} />
+      <Saved show={state.ok && !pending} />
       <button type="submit" disabled={pending} className="rounded-full bg-accent px-6 py-2.5 text-sm font-medium text-accent-ink disabled:opacity-60">
         {pending ? 'Saving…' : 'Save'}
       </button>

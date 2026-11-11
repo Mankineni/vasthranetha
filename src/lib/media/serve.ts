@@ -12,21 +12,25 @@ const TYPES: Record<string, string> = {
 
 const notFound = () => new Response('Not found', { status: 404 })
 
+// Only the exact names the app writes are served: a two-letter hash folder (or site/), and
+// <sha256>-<width>.webp, <sha256>-og.jpg or a video's <sha256>-orig.mp4. Photo originals
+// (which keep camera metadata) and any other name, including Windows short 8.3 names
+// that point at the same files, are refused.
+const FOLDER = /^([0-9a-f]{2}|site)$/
+const FILE = /^[0-9a-f]{64}-(\d{1,5}\.webp|og\.jpg|orig\.mp4)$/
+
 function stream(file: string, start: number, end: number): ReadableStream {
   return Readable.toWeb(fs.createReadStream(file, { start, end })) as ReadableStream
 }
 
 /** Serves a file from mediaDir. Files never change (names carry a content hash), so they are cached for a year. */
 export async function serveMedia(req: Request, segments: string[], mediaDir: string): Promise<Response> {
-  if (!segments.length || segments.some((s) => !s || s === '.' || s === '..' || /[\\:\0]/.test(s))) return notFound()
+  if (segments.length !== 2 || !FOLDER.test(segments[0]) || !FILE.test(segments[1])) return notFound()
   const root = path.resolve(mediaDir)
   const file = path.resolve(root, ...segments)
   if (!file.startsWith(root + path.sep)) return notFound()
   const type = TYPES[path.extname(file).toLowerCase()]
   if (!type) return notFound()
-  // Photo originals keep their camera metadata (GPS location, device). They stay on disk
-  // for regenerating sizes, but only the processed, metadata-free versions are served.
-  if (/-orig\.(jpe?g|png|webp)$/i.test(file)) return notFound()
 
   let size: number
   try {

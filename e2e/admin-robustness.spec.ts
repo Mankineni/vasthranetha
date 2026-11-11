@@ -34,6 +34,38 @@ test('save a draft, go Back, type a second product: both are kept', async ({ pag
   await expect(page.getByRole('link', { name: second })).toBeVisible()
 })
 
+test('Back after editing shows the saved values, so saving again cannot undo the edit', async ({ page, request }) => {
+  const name = uniqueName('Back Edit')
+  await page.goto('/admin/products/new')
+  await page.getByTestId('photo-input').setInputFiles([fixture('second.jpg')])
+  await expect(page.locator(done)).toHaveCount(1, { timeout: 30_000 })
+  await page.getByTestId('name').fill(name)
+  await page.getByTestId('price').fill('2000')
+  await page.getByTestId('publish').click()
+  await expect(page).toHaveURL(/\/admin\/products$/)
+
+  await page.getByRole('link', { name }).click()
+  await expect(page).toHaveURL(/\/admin\/products\/\d+$/)
+  await page.getByTestId('price').fill('2345')
+  await page.getByTestId('save').click()
+  await expect(page).toHaveURL(/\/admin\/products$/)
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/admin\/products\/\d+$/)
+  await expect(page.getByTestId('price')).toHaveValue('2345')
+  await page.getByTestId('save').click()
+  await expect(page).toHaveURL(/\/admin\/products$/)
+  const [card] = await findPublic(request, name)
+  expect(card.price).toBe(2345)
+})
+
+test('the settings image upload refuses an oversized body without reading it', async ({ page }) => {
+  const res = await page.request.post('/admin/site-image', {
+    multipart: { target: 'banner', file: { name: 'huge.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(27 * MB) } },
+  })
+  expect(res.status()).toBe(413)
+})
+
 test('a save that fails on a lost connection keeps everything typed and says what happened', async ({ page, context }) => {
   await page.goto('/admin/products/new')
   await page.getByTestId('photo-input').setInputFiles([fixture('second.jpg')])

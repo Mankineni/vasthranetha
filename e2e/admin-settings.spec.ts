@@ -160,6 +160,32 @@ test('saving the price bands keeps existing /price links working', async ({ page
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Under ₹999 (edited)')
 })
 
+test('a band added in this visit keeps its address when saved again', async ({ page, request }) => {
+  await page.goto('/admin/settings/bands')
+  await page.getByRole('button', { name: 'Add band' }).click()
+  const added = page.getByTestId('band-row').last()
+  await added.getByLabel('Label').fill('Luxury')
+  await added.getByLabel('From (₹)').fill('9000')
+  await page.getByRole('button', { name: 'Save price bands' }).click()
+  await expect(page.getByText('Saved.')).toBeVisible()
+
+  // Someone shares the new band's link now (read without leaving the editor).
+  const home = await (await request.get('/')).text()
+  const href = /href="(\/price\/\d+)"[^>]*>Luxury</.exec(home)![1]
+
+  // The owner fixes the label and saves again, still on the same screen.
+  await added.getByLabel('Label').fill('Luxury picks')
+  await page.getByRole('button', { name: 'Save price bands' }).click()
+  await expect(page.getByText('Saved.')).toBeVisible()
+
+  const res = await request.get(href)
+  expect(res.status()).toBe(200)
+  expect(await res.text()).toContain('Luxury picks')
+
+  // Later tests in this file start from the seeded three bands.
+  withDb((db) => savePriceBands(db, SEED_BANDS))
+})
+
 test('replacing the price bands changes the home page', async ({ page }) => {
   await page.goto('/admin/settings/bands')
   const rows = page.getByTestId('band-row')

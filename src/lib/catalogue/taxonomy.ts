@@ -59,8 +59,9 @@ export function updateCategory(
     const slug = slugify(patch.name)
     const clash = db.select().from(categories).where(eq(categories.slug, slug)).get()
     if (clash && clash.id !== id) return { ok: false, error: `${patch.name.trim()} already exists.` }
+    // The address (/c/<slug>) is kept from when the category was created, so links already
+    // shared on WhatsApp keep working after a rename.
     set.name = patch.name.trim()
-    set.slug = slug
   }
   if (patch.codePrefix !== undefined) {
     const err = prefixError(patch.codePrefix)

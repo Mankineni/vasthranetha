@@ -29,6 +29,22 @@ test('categories are created with slug and upper-case prefix, listed in the orde
   expect(listCategories(db)[0].name).toBe('Accessories')
 })
 
+test('renaming a category keeps its address, so shared /c/ links keep working', () => {
+  const db = createTestDb()
+  const r = createCategory(db, { name: 'Sarees', codePrefix: 'S' })
+  if (!r.ok) throw new Error('setup')
+  expect(updateCategory(db, r.id, { name: 'Silk Sarees' })).toEqual({ ok: true })
+  expect(listCategories(db)[0]).toMatchObject({ name: 'Silk Sarees', slug: 'sarees' })
+})
+
+test('a rename may not take another category’s name', () => {
+  const db = createTestDb()
+  const a = createCategory(db, { name: 'Sarees', codePrefix: 'S' })
+  createCategory(db, { name: 'Dresses', codePrefix: 'D' })
+  if (!a.ok) throw new Error('setup')
+  expect(updateCategory(db, a.id, { name: 'dresses' }).ok).toBe(false)
+})
+
 test.each(['', '1', 'ABCD', 'S1'])('category prefix %s is rejected', (prefix) => {
   expect(createCategory(createTestDb(), { name: 'X', codePrefix: prefix }).ok).toBe(false)
 })

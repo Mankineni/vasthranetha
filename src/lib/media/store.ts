@@ -5,6 +5,7 @@ import { and, asc, eq, inArray, isNull, lt } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { media } from '@/db/schema'
 import type { MediaItem } from '@/lib/catalogue/types'
+import { stripMp4Metadata } from './mp4'
 import { LOW_RES_LIMIT, processPhoto } from './process'
 import { validateUpload } from './validate'
 
@@ -78,9 +79,11 @@ export async function saveVideo(db: Db, buf: Buffer, opts: SaveOpts): Promise<Me
   const check = await validateUpload(buf)
   if (!check.ok) throw new Error(check.reason)
   if (check.kind !== 'video') throw new Error('Expected a video.')
-  const hash = hashOf(buf)
+  // Videos are served as stored, so recording location and device details are removed first.
+  const clean = stripMp4Metadata(buf)
+  const hash = hashOf(clean)
   const originalPath = `${hash.slice(0, 2)}/${hash}-orig.mp4`
-  await writeIfMissing(opts.mediaDir, originalPath, buf)
+  await writeIfMissing(opts.mediaDir, originalPath, clean)
   const [row] = db
     .insert(media)
     .values({ kind: 'video', batchId: opts.batchId, createdAt: opts.now, originalPath, variants: [] })

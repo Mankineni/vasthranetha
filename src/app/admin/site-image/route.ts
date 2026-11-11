@@ -16,6 +16,9 @@ const fail = (status: number, error: string) => Response.json({ error }, { statu
 /** Uploads a logo, banner, customer photo or category tile and stores it in the settings. */
 export async function POST(req: Request) {
   if (!(await getOwner())) return fail(401, 'Please sign in again.')
+  // Refuse an oversized body from its declared length, before reading it into memory.
+  const declared = Number(req.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_PHOTO_BYTES + 64 * 1024) return fail(413, REASON_PHOTO_SIZE)
   let form: FormData
   try {
     form = await req.formData()

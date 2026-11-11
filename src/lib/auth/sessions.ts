@@ -30,6 +30,25 @@ function tokenHash(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+/**
+ * Finds an owner by login however it was typed. Phone logins saved before logins were
+ * normalised are stored as typed, so those are compared in normalised form too, and
+ * rewritten to the normalised form once found.
+ */
+function findUserByLogin(db: Db, rawLogin: string) {
+  const login = normaliseLogin(rawLogin)
+  if (!login) return undefined
+  const exact = db.select().from(users).where(eq(users.login, login)).get()
+  if (exact || login.includes('@')) return exact
+  const legacy = db
+    .select()
+    .from(users)
+    .all()
+    .find((u) => !u.login.includes('@') && u.login !== login && normaliseLogin(u.login) === login)
+  if (legacy) db.update(users).set({ login }).where(eq(users.id, legacy.id)).run()
+  return legacy ? { ...legacy, login } : undefined
+}
+
 export async function createOwner(
   db: Db,
   input: { name: string; login: string; password: string },
@@ -38,9 +57,7 @@ export async function createOwner(
   if (!login) throw new Error('Enter a login (email or phone number).')
   if (!input.name.trim()) throw new Error('Enter a name.')
   if (input.password.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
-  if (db.select({ id: users.id }).from(users).where(eq(users.login, login)).get()) {
-    throw new Error(`An owner with login ${login} already exists.`)
-  }
+  if (findUserByLogin(db, login)) throw new Error(`An owner with login ${login} already exists.`)
   const passwordHash = await hashPassword(input.password)
   const row = db.insert(users).values({ name: input.name.trim(), login, passwordHash }).returning({ id: users.id }).get()
   return { id: row.id }
@@ -50,7 +67,7 @@ export async function createOwner(
 export async function resetPassword(db: Db, rawLogin: string, password: string): Promise<void> {
   if (password.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
   const login = normaliseLogin(rawLogin)
-  const user = db.select({ id: users.id }).from(users).where(eq(users.login, login)).get()
+  const user = findUserByLogin(db, rawLogin)
   if (!user) throw new Error(`No owner with login ${login}.`)
   const passwordHash = await hashPassword(password)
   db.transaction((tx) => {
@@ -75,7 +92,7 @@ export async function signIn(
     .all().length
   if (failures >= LOCKOUT_FAILURES) return { ok: false, reason: 'locked' }
 
-  const user = login ? db.select().from(users).where(eq(users.login, login)).get() : undefined
+  const user = findUserByLogin(db, rawLogin)
   const valid = user ? await verifyPassword(user.passwordHash, password) : await verifyPassword(await getDummyHash(), `x${password}`)
   if (!user || !valid) {
     db.insert(loginAttempts).values({ login, at: now }).run()

@@ -1,5 +1,5 @@
 import { createTestDb } from '../helpers/db'
-import { sessions } from '@/db/schema'
+import { sessions, users } from '@/db/schema'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import {
   createOwner,
@@ -108,6 +108,16 @@ test('a phone-number login works however the number is typed', async () => {
     expect((await signIn(db, typed, PASSWORD, NOW)).ok, typed).toBe(true)
   }
   await expect(createOwner(db, { name: 'Dup', login: '9876543210', password: PASSWORD })).rejects.toThrow(/exists/)
+})
+
+test('an owner saved with an older, as-typed phone login can still sign in and be reset', async () => {
+  const db = createTestDb()
+  // Before phone logins were normalised, the login was stored trimmed and lower-cased only.
+  db.insert(users).values({ name: 'Old', login: '+91 98765 43210', passwordHash: await hashPassword(PASSWORD) }).run()
+  expect((await signIn(db, '9876543210', PASSWORD, NOW)).ok).toBe(true)
+  expect((await signIn(db, '+91 98765 43210', PASSWORD, NOW)).ok).toBe(true)
+  await resetPassword(db, '098765 43210', 'another-long-password')
+  expect((await signIn(db, '9876543210', 'another-long-password', NOW)).ok).toBe(true)
 })
 
 test('resetPassword sets a new password and signs the owner out everywhere', async () => {

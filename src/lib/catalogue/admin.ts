@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
 import { categories, fabrics, media, occasions, productOccasions, products } from '@/db/schema'
-import { nextCode, slugify } from './codes'
+import { nextCode, normaliseCodeQuery, slugify } from './codes'
 import {
   type AdminProduct,
   MAX_PHOTOS,
@@ -132,8 +132,10 @@ export function createProduct(
   const existing = db.select().from(products).where(eq(products.submitToken, input.submitToken)).get()
   if (existing) {
     // The same form sent again (a double tap, or a retry after a lost connection):
-    // save its latest values onto the product it already created rather than drop them.
-    assertValid(input, opts.publish || existing.status !== 'draft')
+    // save its latest values onto the product it already created rather than drop them,
+    // and follow the button pressed this time (Publish or Save as draft).
+    assertValid(input, opts.publish)
+    if (!opts.publish && existing.status !== 'draft') setStatus(db, existing.id, 'draft', userId, opts.now)
     updateProduct(db, existing.id, input, userId, opts.now)
     if (opts.publish && existing.status === 'draft') setStatus(db, existing.id, 'available', userId, opts.now)
     return getAdminProduct(db, existing.id)!
@@ -322,7 +324,7 @@ export function listAdminProducts(
   const q = f.q?.trim()
   if (q) {
     const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`)
-    conds.push(or(sql`${products.name} LIKE ${`%${escaped}%`} ESCAPE '\\'`, eq(products.code, q.toUpperCase())))
+    conds.push(or(sql`${products.name} LIKE ${`%${escaped}%`} ESCAPE '\\'`, eq(products.code, normaliseCodeQuery(q) ?? q.toUpperCase())))
   }
   if (f.status) conds.push(eq(products.status, f.status))
   const rows = db

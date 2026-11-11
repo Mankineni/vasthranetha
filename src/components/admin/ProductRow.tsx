@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react'
 import { duplicate, markAvailable, markSold, removeProduct } from '@/app/admin/(app)/products/actions'
 import { formatPrice } from '@/lib/format'
 import type { ProductStatus } from '@/lib/catalogue/types'
+import { safely } from './safeAction'
 
 export type RowProduct = {
   id: number
@@ -30,10 +31,11 @@ export function ProductRow({ p }: { p: RowProduct }) {
   const [error, setError] = useState<string | null>(null)
   const badge = BADGE[p.status]
 
+  // A lost connection becomes a message on the row, not an error page.
   const run = (fn: () => Promise<unknown>) =>
     startTransition(async () => {
       setError(null)
-      const result = (await fn()) as { error?: string | null } | undefined
+      const result = (await safely(fn)) as { error?: string | null } | undefined
       if (result?.error) setError(result.error)
     })
 

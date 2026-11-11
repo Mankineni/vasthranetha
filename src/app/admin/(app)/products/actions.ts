@@ -51,6 +51,9 @@ export async function saveProduct(_prev: SaveState, form: FormData): Promise<Sav
     if (err instanceof ProductError) return { errors: [err.message] }
     throw err
   }
+  // Revalidating clears the browser's back/forward page cache, so Back after saving shows
+  // the saved values instead of the form as it was before (saving that again would undo it).
+  revalidatePath('/admin', 'layout')
   redirect('/admin/products')
 }
 

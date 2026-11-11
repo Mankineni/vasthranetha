@@ -1,7 +1,45 @@
+import fs from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { findPublic, fixture, signInAsOwner, uniqueName } from './helpers'
 
 const SECRETS = ['ZZDEALER', 'ZZCODE', '777123', 'ZZNOTE']
+
+/** A small MP4 whose metadata says where it was recorded, as phones write it. */
+function mp4WithLocation(gps: string): Buffer {
+  const box = (type: string, ...parts: Buffer[]) => {
+    const body = Buffer.concat(parts)
+    const head = Buffer.alloc(8)
+    head.writeUInt32BE(8 + body.length, 0)
+    head.write(type, 4, 'latin1')
+    return Buffer.concat([head, body])
+  }
+  const ftyp = box('ftyp', Buffer.from('isom\0\0\x02\0isommp41', 'latin1'))
+  const moov = box('moov', box('mvhd', Buffer.alloc(100)), box('udta', box('\xa9xyz', Buffer.from(gps, 'latin1'))))
+  return Buffer.concat([ftyp, moov, box('mdat', Buffer.alloc(2048, 0x11))])
+}
+
+test('a product video is served without the location it was recorded at', async ({ page, request }) => {
+  const GPS = '+17.3850+078.4867/'
+  await signInAsOwner(page)
+  const name = uniqueName('Video Privacy')
+  await page.goto('/admin/products/new')
+  await page.getByTestId('photo-input').setInputFiles([
+    { name: 'second.jpg', mimeType: 'image/jpeg', buffer: fs.readFileSync(fixture('second.jpg')) },
+    { name: 'clip.mp4', mimeType: 'video/mp4', buffer: mp4WithLocation(GPS) },
+  ])
+  await expect(page.locator('[data-testid^="photo-"][data-status="done"]')).toHaveCount(2, { timeout: 30_000 })
+  await page.getByTestId('name').fill(name)
+  await page.getByTestId('price').fill('1999')
+  await page.getByTestId('publish').click()
+  await expect(page).toHaveURL(/\/admin\/products$/)
+
+  const [card] = await findPublic(request, name)
+  const html = await (await request.get(card.path)).text()
+  const src = /\/media\/[0-9a-f]{2}\/[0-9a-f]{64}-orig\.mp4/.exec(html)![0]
+  const video = await request.get(src)
+  expect(video.status()).toBe(200)
+  expect((await video.body()).toString('latin1')).not.toContain(GPS)
+})
 
 test('dealer details never reach a signed-out visitor, and admin is closed to them', async ({ page, request }) => {
   // The owner adds a product with every private field filled in.

@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { addListItem, removeListItem, type ActionResult } from '@/app/admin/(app)/settings/actions'
+import { safely, useSafeForm } from '../safeAction'
 import { ErrorText, inputClass } from './ui'
 
 type Props = { kind: 'fabric' | 'occasion'; title: string; items: { id: number; name: string }[]; placeholder: string }
@@ -10,7 +11,7 @@ const start: ActionResult = { ok: false, error: null, version: 0 }
 
 /** Fabrics or occasions: add and delete names used by the product form and the filters. */
 export function NamedListEditor({ kind, title, items, placeholder }: Props) {
-  const [state, action, pending] = useActionState(addListItem.bind(null, kind), start)
+  const { state, onSubmit, pending } = useSafeForm(addListItem.bind(null, kind), start)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [busy, startTransition] = useTransition()
 
@@ -28,7 +29,7 @@ export function NamedListEditor({ kind, title, items, placeholder }: Props) {
               className="flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-accent-soft"
               onClick={() => {
                 if (!window.confirm(`Delete ${item.name}?`)) return
-                startTransition(async () => setDeleteError((await removeListItem(kind, item.id)).error))
+                startTransition(async () => setDeleteError((await safely(() => removeListItem(kind, item.id))).error))
               }}
             >
               ×
@@ -37,7 +38,7 @@ export function NamedListEditor({ kind, title, items, placeholder }: Props) {
         ))}
       </ul>
       <ErrorText error={deleteError} />
-      <form key={state.version} action={action} className="mt-3 flex items-end gap-2">
+      <form key={state.version} onSubmit={onSubmit} className="mt-3 flex items-end gap-2">
         <label className="min-w-0 flex-1">
           <span className="text-sm">New {kind}</span>
           <input name="name" required placeholder={placeholder} className={inputClass} />

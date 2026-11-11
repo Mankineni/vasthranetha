@@ -1,13 +1,17 @@
 'use client'
 
-import { useActionState } from 'react'
 import { signInAction, type LoginState } from '@/app/admin/login/actions'
+import { useSafeForm } from './safeAction'
 
 export function LoginForm({ next }: { next: string }) {
-  const [state, action, pending] = useActionState<LoginState, FormData>(signInAction, { error: null, login: '' })
+  const { state, onSubmit, pending } = useSafeForm<LoginState>(
+    signInAction,
+    { error: null, login: '' },
+    'Could not reach the site. Check your connection and try again.',
+  )
 
   return (
-    <form action={action} className="mt-6 space-y-4">
+    <form onSubmit={onSubmit} className="mt-6 space-y-4">
       <input type="hidden" name="next" value={next} />
       <label className="block">
         <span className="text-sm font-medium text-ink">Email or phone</span>

@@ -175,12 +175,16 @@ describe('store', () => {
     expect(listBatch(db, 'b1').map((m) => m.id)).toEqual([saved.id, ok.id])
   })
 
-  test('saveVideo stores the file as is', async () => {
+  test('saveVideo stores the video with its metadata removed', async () => {
     const db = createTestDb()
-    const v = await saveVideo(db, mp4Header(), { batchId: 'b', mediaDir, now: 1 })
+    const gps = Buffer.from('+12.9716+077.5946/', 'latin1')
+    const udta = Buffer.concat([Buffer.from([0, 0, 0, 8 + 8 + gps.length]), Buffer.from('udta', 'latin1'), Buffer.from([0, 0, 0, 8 + gps.length]), Buffer.from('\xa9xyz', 'latin1'), gps])
+    const moov = Buffer.concat([Buffer.from([0, 0, 0, 8 + udta.length]), Buffer.from('moov', 'latin1'), udta])
+    const ftyp = mp4Header().subarray(0, 24) // the ftyp box alone, as in a real file
+    const v = await saveVideo(db, Buffer.concat([ftyp, moov]), { batchId: 'b', mediaDir, now: 1 })
     expect(v).toMatchObject({ kind: 'video', variants: [], previewPath: null })
     expect(v.originalPath).toMatch(/-orig\.mp4$/)
-    expect(exists(v.originalPath)).toBe(true)
+    expect(fs.readFileSync(path.join(mediaDir, v.originalPath)).includes(gps)).toBe(false)
   })
 
   test('identical uploads share files; files go only when the last row goes', async () => {
@@ -290,6 +294,20 @@ describe('serveMedia', () => {
     const db = createTestDb()
     const v = await saveVideo(db, mp4Header(), { batchId: 'b', mediaDir, now: 1 })
     expect((await get(v.originalPath)).status).toBe(200)
+  })
+
+  test('only the exact names the app writes are served (no Windows short names, no stray files)', async () => {
+    const m = await stored()
+    const dir = m.originalPath.split('/')[0]
+    const hash6 = m.originalPath.split('/')[1].slice(0, 6).toUpperCase()
+    fs.writeFileSync(path.join(mediaDir, dir, 'notes.jpg'), 'x')
+    for (const p of [`${dir}/${hash6}~1.JPG`, `${dir}/${hash6}~1.PNG`, `${dir}/notes.jpg`, `zz/${m.variants[0].path.split('/')[1]}`]) {
+      expect((await get(p)).status, p).toBe(404)
+    }
+    expect((await get(m.variants[0].path)).status).toBe(200)
+    expect((await get(m.previewPath!)).status).toBe(200)
+    const site = await saveSiteImage(await makeImage({ width: 1200, height: 600, format: 'png' }), mediaDir)
+    expect((await get(site.variants[0].path)).status).toBe(200)
   })
 
   test('.. and missing files are 404', async () => {

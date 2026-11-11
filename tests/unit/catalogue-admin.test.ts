@@ -49,6 +49,21 @@ test('a repeated submitToken saves the latest values onto the same product inste
   expect(db.select().from(products).all()).toHaveLength(1)
 })
 
+test('a "Save as draft" retry after a Publish whose answer was lost puts the product back to draft', () => {
+  const { db, sarees, user } = setup()
+  const token = 'tok-intent-1234'
+  const input = makeInput(sarees, { submitToken: token, mediaIds: [makeMediaRow(db)] })
+  createProduct(db, input, user, { publish: true, now: 1 })
+  const again = createProduct(db, input, user, { publish: false, now: 2 })
+  expect(again.status).toBe('draft')
+})
+
+test('admin search finds a code typed without the hyphen', () => {
+  const { db, sarees, user } = setup()
+  const a = createProduct(db, makeInput(sarees), user, { publish: false, now: 1 })
+  expect(listAdminProducts(db, { q: a.code.replace('-', '') }).map((p) => p.id)).toEqual([a.id])
+})
+
 test('choosing a fabric or occasion that was just deleted gives a clear error, not a crash', () => {
   const { db, sarees, user } = setup()
   expect(() => createProduct(db, makeInput(sarees, { fabricId: 424242 }), user, { publish: false, now: 1 })).toThrow(ProductError)

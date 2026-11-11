@@ -1,6 +1,7 @@
 'use client'
 
 // Small shared pieces for the settings screens.
+import { precheckSiteImage } from '@/lib/media/limits'
 
 export const inputClass = 'mt-1 block w-full rounded-md border border-line bg-surface px-3 py-2.5 text-base text-ink'
 
@@ -25,6 +26,9 @@ export async function uploadSiteImage(
   target: 'logo' | 'banner' | 'customer' | 'tile',
   categoryId?: number,
 ): Promise<string | null> {
+  // Refuse wrong types and oversized files before sending them over mobile data.
+  const refused = precheckSiteImage(file)
+  if (refused) return refused
   const body = new FormData()
   body.set('file', file)
   body.set('target', target)

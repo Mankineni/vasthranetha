@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { clearSiteImage, removeCustomerPhoto } from '@/app/admin/(app)/settings/actions'
 import { mediaUrl } from '@/lib/media/urls'
+import { failed, safely } from '../safeAction'
 import { ErrorText, uploadSiteImage } from './ui'
 
 const ACCEPT = 'image/jpeg,image/png,image/webp'
@@ -40,10 +41,13 @@ export function ImageField({ target, label, hint, current }: { target: 'logo' | 
           <button
             type="button"
             className="text-sm text-danger"
-            onClick={() => startTransition(async () => {
-              await clearSiteImage(target)
-              router.refresh()
-            })}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await safely(() => clearSiteImage(target))
+                setError(failed(r) ? r.error : null)
+                router.refresh()
+              })
+            }
           >
             Remove
           </button>
@@ -86,10 +90,13 @@ export function CustomerPhotos({ photos }: { photos: string[] }) {
               type="button"
               aria-label="Remove photo"
               className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
-              onClick={() => startTransition(async () => {
-                await removeCustomerPhoto(p)
-                router.refresh()
-              })}
+              onClick={() =>
+                startTransition(async () => {
+                  const r = await safely(() => removeCustomerPhoto(p))
+                  setError(failed(r) ? r.error : null)
+                  router.refresh()
+                })
+              }
             >
               ×
             </button>

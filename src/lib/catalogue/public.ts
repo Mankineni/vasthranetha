@@ -4,7 +4,7 @@ import { and, asc, desc, eq, exists, gt, gte, inArray, lte, ne, or, sql, type SQ
 import type { Db } from '@/db/client'
 import { categories, fabrics, media, occasions, priceBands, productOccasions, products } from '@/db/schema'
 import { getSettings } from '@/lib/settings/settings'
-import { productPath } from './codes'
+import { normaliseCodeQuery, productPath } from './codes'
 import type { MediaItem } from './types'
 
 const DAY_MS = 86_400_000
@@ -141,7 +141,7 @@ export function listPublicProducts(db: Db, query: ListQuery): { items: PublicCar
   const q = query.q?.trim()
   if (q) {
     conds.push(
-      or(sql`${products.name} LIKE ${`%${escapeLike(q)}%`} ESCAPE '\\'`, eq(products.code, q.toUpperCase()))!,
+      or(sql`${products.name} LIKE ${`%${escapeLike(q)}%`} ESCAPE '\\'`, eq(products.code, normaliseCodeQuery(q) ?? q.toUpperCase()))!,
     )
   }
 

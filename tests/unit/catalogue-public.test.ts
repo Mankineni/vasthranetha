@@ -90,6 +90,15 @@ test('search matches name in any case, or the code', () => {
   expect(listPublicProducts(db, { now: NOW, q: '100%' }).items).toEqual([])
 })
 
+test('a code typed without the hyphen, or with a space, still finds the product', () => {
+  const { db, sarees, add } = setup()
+  const a = add(sarees, { name: 'Maroon Soft Silk' })
+  const [prefix, number] = a.code.split('-')
+  for (const typed of [`${prefix}${number}`, `${prefix.toLowerCase()} ${number}`, ` ${prefix}-${number} `]) {
+    expect(listPublicProducts(db, { now: NOW, q: typed }).items.map((p) => p.code), typed).toEqual([a.code])
+  }
+})
+
 test('sort orders, ties broken by newest', () => {
   const { db, sarees, add } = setup()
   add(sarees, { name: 'old-cheap', price: 500 }, NOW - 5 * DAY)

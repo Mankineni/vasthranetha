@@ -13,6 +13,7 @@ import {
   listCategories,
   listFabrics,
   listOccasions,
+  listPriceBands,
   savePriceBands,
   updateCategory,
 } from '@/lib/catalogue/taxonomy'
@@ -149,9 +150,12 @@ export async function removeListItem(kind: 'fabric' | 'occasion', id: number): P
 
 // --- price bands ---
 
+export type SavedBand = { id: number; label: string; min: number; max: number | null }
+
+/** Saves the bands and returns them as stored, so the editor can adopt the new bands' ids. */
 export async function saveBands(
   bands: { id?: number; label: string; min: string; max: string }[],
-): Promise<{ ok: boolean; error: string | null }> {
+): Promise<{ ok: boolean; error: string | null; bands?: SavedBand[] }> {
   await requireOwner()
   const parsed = []
   for (const b of bands.slice(0, 12)) {
@@ -163,7 +167,8 @@ export async function saveBands(
   const r = savePriceBands(getDb(), parsed)
   if (!r.ok) return { ok: false, error: r.error }
   refresh()
-  return { ok: true, error: null }
+  const stored = listPriceBands(getDb()).map(({ id, label, min, max }) => ({ id, label, min, max }))
+  return { ok: true, error: null, bands: stored }
 }
 
 // --- page texts ---

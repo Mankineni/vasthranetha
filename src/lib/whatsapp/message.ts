@@ -14,6 +14,7 @@ function oneLine(text: string): string {
 export function normaliseWhatsAppNumber(input: string): string | null {
   let digits = input.replace(/\D/g, '')
   if (digits.startsWith('00')) digits = digits.slice(2) // international prefix
+  if (digits.length === 13 && digits.startsWith('091')) digits = digits.slice(1) // "091 ..." / "+091 ..."
   if (digits.length === 13 && digits.startsWith('910')) digits = `91${digits.slice(3)}` // "+91 0..."
   if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1) // trunk prefix
   if (digits.length === 10) digits = `91${digits}`

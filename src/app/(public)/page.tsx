@@ -27,7 +27,7 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4">
-      <section className="relative mt-4 overflow-hidden rounded-xl bg-accent text-accent-ink">
+      <section data-testid="hero" className="relative mt-4 overflow-hidden rounded-xl bg-accent text-accent-ink">
         {s.banner && (
           // eslint-disable-next-line @next/next/no-img-element -- site banner served from /media
           <img src={mediaUrl(s.banner)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />

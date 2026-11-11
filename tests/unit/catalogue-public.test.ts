@@ -1,7 +1,7 @@
 import { createTestDb } from '../helpers/db'
 import { makeCategories, makeInput, makeMediaRow, makeUser } from '../helpers/fixtures'
 import { createProduct, setStatus } from '@/lib/catalogue/admin'
-import { getPublicProduct, listPublicProducts, relatedProducts } from '@/lib/catalogue/public'
+import { getPublicProduct, listPublicProducts, listSitemapEntries, relatedProducts } from '@/lib/catalogue/public'
 import { createFabric, createOccasion, savePriceBands, listPriceBands } from '@/lib/catalogue/taxonomy'
 import { updateSettings } from '@/lib/settings/settings'
 import type { ProductInput } from '@/lib/catalogue/types'
@@ -157,6 +157,17 @@ test('product detail and related products', () => {
   expect(related[0].name).toBe('Rel0')
 })
 
+test('sitemap entries are the available products only', () => {
+  const { db, sarees, user, add } = setup()
+  const live = add(sarees, { name: 'Live One' }, NOW - 2 * DAY)
+  const sold = add(sarees, { name: 'Sold One' })
+  setStatus(db, sold.id, 'sold', user, NOW)
+  createProduct(db, makeInput(sarees, { name: 'Draft One' }), user, { publish: false, now: NOW })
+  expect(listSitemapEntries(db)).toEqual([
+    { path: `/p/${live.code.toLowerCase()}-live-one`, updatedAt: NOW - 2 * DAY },
+  ])
+})
+
 test('dealer fields never leave the public functions', () => {
   const { db, sarees, add } = setup()
   const p = add(sarees, { dealerName: 'ZZDEALER', dealerCode: 'ZZCODE', dealerPrice: 777123, notes: 'ZZNOTE' })
@@ -166,6 +177,7 @@ test('dealer fields never leave the public functions', () => {
     getPublicProduct(db, p.code),
     relatedProducts(db, p.code),
     listPublicProducts(db, { now: NOW, q: p.code }),
+    listSitemapEntries(db),
   ])
   for (const secret of ['ZZDEALER', 'ZZCODE', '777123', 'ZZNOTE', 'dealer', 'notes', 'submitToken', 'createdBy']) {
     expect(out).not.toContain(secret)

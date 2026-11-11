@@ -79,6 +79,42 @@ describe('processPhoto', () => {
     expect((await sharp(small.preview).metadata()).height).toBe(400)
   })
 
+  test('fine red and gold detail keeps its colour', async () => {
+    // Thin gold "zari" threads on maroon and red dots on red: the worst case for chroma subsampling.
+    const W = 480
+    const H = 640
+    const threads = Array.from({ length: W / 6 }, (_, i) => `<rect x="${i * 6}" width="2" height="${H}" fill="#d4a73a"/>`)
+    const dots: string[] = []
+    for (let y = 10; y < H / 2; y += 9) for (let x = (y % 18) / 2; x < W; x += 9) dots.push(`<circle cx="${x}" cy="${y}" r="1.6" fill="#c9182f"/>`)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+      <rect width="${W}" height="${H / 2}" fill="#6e0f1f"/><rect y="${H / 2}" width="${W}" height="${H / 2}" fill="#b0122b"/>
+      <g opacity="0.9">${threads.join('')}</g><g transform="translate(0 ${H / 2})">${dots.join('')}</g></svg>`
+    const png = await sharp(Buffer.from(svg)).png().toBuffer()
+    const ref = await sharp(png).removeAlpha().raw().toBuffer()
+
+    const out = await processPhoto(png)
+    const full = out.variants.find((v) => v.width === H)! // same size as the source, so pixels line up
+    const got = await sharp(full.data).removeAlpha().raw().toBuffer()
+
+    const lab = (r: number, g: number, b: number) => {
+      const lin = (c: number) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+      const [R, G, B] = [lin(r), lin(g), lin(b)]
+      const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116)
+      const X = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047)
+      const Y = f(0.2126 * R + 0.7152 * G + 0.0722 * B)
+      const Z = f((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883)
+      return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)]
+    }
+    let sum = 0
+    for (let i = 0; i < W * H; i++) {
+      const a = lab(ref[i * 3], ref[i * 3 + 1], ref[i * 3 + 2])
+      const b = lab(got[i * 3], got[i * 3 + 1], got[i * 3 + 2])
+      sum += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+    }
+    // Plain 4:2:0 WebP scores about 9 here; smart subsampling about 7.
+    expect(sum / (W * H)).toBeLessThan(8)
+  })
+
   test('output is sRGB', async () => {
     const out = await processPhoto(await makeImage({ width: 800, height: 600, format: 'jpeg' }))
     expect((await sharp(out.variants[0].data).metadata()).space).toBe('srgb')

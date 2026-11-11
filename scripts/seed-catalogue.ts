@@ -94,3 +94,20 @@ export const SEED_PAGES = {
 export const listedSeed = SEED_PRODUCTS.filter(
   (p) => p.state !== 'draft' && !(typeof p.state === 'object' && p.state.soldDaysAgo > 7),
 )
+
+/** Insertion order used by the seed: oldest first, so "newest" ordering matches daysAgo. */
+export const SEED_ORDER = [...SEED_PRODUCTS].sort((a, b) => b.daysAgo - a.daysAgo)
+
+/** Product code a seeded product gets in a fresh database (one counter from 1001, in SEED_ORDER). */
+export function seedCode(name: string): string {
+  const i = SEED_ORDER.findIndex((p) => p.name === name)
+  if (i < 0) throw new Error(`No seed product named ${name}`)
+  const prefix = SEED_CATEGORIES.find((c) => c.name === SEED_ORDER[i].category)!.codePrefix
+  return `${prefix}-${1001 + i}`
+}
+
+export function seedProduct(name: string): SeedProduct {
+  const p = SEED_PRODUCTS.find((s) => s.name === name)
+  if (!p) throw new Error(`No seed product named ${name}`)
+  return p
+}

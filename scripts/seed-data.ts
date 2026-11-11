@@ -21,8 +21,8 @@ import {
   SEED_CATEGORIES,
   SEED_FABRICS,
   SEED_OCCASIONS,
+  SEED_ORDER,
   SEED_PAGES,
-  SEED_PRODUCTS,
   SEED_TAGLINE,
   SEED_WHATSAPP,
 } from './seed-catalogue'
@@ -91,8 +91,7 @@ export async function seedDatabase(db: Db, mediaDir: string, now = Date.now(), l
   const fabId = new Map(listFabrics(db).map((f) => [f.name, f.id]))
   const occId = new Map(listOccasions(db).map((o) => [o.name, o.id]))
 
-  // Oldest first, so "newest" ordering matches daysAgo.
-  const ordered = [...SEED_PRODUCTS].sort((a, b) => b.daysAgo - a.daysAgo)
+  const ordered = SEED_ORDER
   for (const [i, p] of ordered.entries()) {
     const at = now - p.daysAgo * DAY - (ordered.length - i) * 60_000
     const mediaIds: number[] = []

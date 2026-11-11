@@ -239,6 +239,17 @@ export function getPublicProduct(db: Db, code: string): PublicProduct | null {
   }
 }
 
+/** Every available product's address, for the sitemap. */
+export function listSitemapEntries(db: Db): { path: string; updatedAt: number }[] {
+  return db
+    .select({ code: products.code, slug: products.slug, updatedAt: products.updatedAt })
+    .from(products)
+    .where(eq(products.status, 'available'))
+    .orderBy(desc(products.publishedAt), desc(products.id))
+    .all()
+    .map((r) => ({ path: productPath(r), updatedAt: r.updatedAt }))
+}
+
 export function relatedProducts(db: Db, code: string, limit = 8): PublicCard[] {
   const self = db
     .select({ id: products.id, categoryId: products.categoryId })

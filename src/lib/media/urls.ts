@@ -24,6 +24,14 @@ export function variantAtLeast(m: Sized, minLongSide: number): string | null {
   return mediaUrl((sorted.find((v) => v.width >= minLongSide) ?? sorted[sorted.length - 1]).path)
 }
 
+/** Pixel size of the link-preview JPEG: long side min(1200, original), same as processPhoto makes it. */
+export function previewSize(m: Pick<MediaItem, 'width' | 'height'>): { width: number; height: number } {
+  const long = Math.max(m.width, m.height)
+  if (!long) return { width: 0, height: 0 }
+  const scale = Math.min(1, 1200 / long)
+  return { width: Math.round(m.width * scale), height: Math.round(m.height * scale) }
+}
+
 export function largestVariant(m: Sized): string | null {
   if (!m.variants.length) return null
   return mediaUrl([...m.variants].sort((a, b) => b.width - a.width)[0].path)

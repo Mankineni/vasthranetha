@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Metadata } from 'next'
 import { getDb } from '@/db/client'
 import { requireOwner } from '@/lib/auth/guard'
+import { isAutofillEnabled } from '@/lib/autofill/autofill'
 import { emptyForm } from '@/lib/catalogue/form'
 import { listBatch } from '@/lib/media/store'
 import { ProductForm } from '@/components/admin/ProductForm'
@@ -41,6 +42,7 @@ export default async function NewProductPage({ searchParams }: Props) {
           submitToken={randomUUID()}
           rejected={Number.isInteger(rejected) && rejected > 0 ? rejected : 0}
           sharedId={sharedId}
+          autofillEnabled={isAutofillEnabled()}
           {...options}
         />
       )}

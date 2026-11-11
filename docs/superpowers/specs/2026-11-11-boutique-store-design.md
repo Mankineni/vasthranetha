@@ -351,4 +351,4 @@ Estimates, to be confirmed against current price lists before launch.
 | Off-server backup storage | about €4 to €7 per month |
 | Cloudflare, HTTPS certificates | free |
 | Extra disk when needed | about €3 per month per 50 GB |
-| "Fill for me" (optional) | well under €1 per month at this volume |
+| "Fill for me" (optional) | about $1 per 100 products with the default model (Claude Opus 5.5 at low effort); about $0.02 per 100 with `AUTOFILL_MODEL=claude-haiku-5-5` |

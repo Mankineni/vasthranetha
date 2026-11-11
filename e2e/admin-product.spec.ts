@@ -140,6 +140,26 @@ test('editing the price shows on the public page at once', async ({ page, reques
   await expect(page.getByTestId('price')).toHaveText('₹2,100')
 })
 
+test('"Fill for me" fills empty fields from the dealer message and keeps what was typed', async ({ page }) => {
+  // The e2e server runs with AUTOFILL_FAKE=1: a built-in stand-in answers instead of the Claude API.
+  await page.goto('/admin/products/new')
+  await page.getByLabel('Description').fill('My own words.')
+  await page.getByLabel("Dealer's message").fill('Peacock blue soft silk, 6.3 m with blouse. Rate 1850. Contact Ravi 98xxxxxx')
+  await page.getByRole('button', { name: 'Fill for me' }).click()
+  await expect(page.getByTestId('name')).toHaveValue('Peacock Blue Soft Silk Saree')
+  await expect(page.getByTestId('dealer-price')).toHaveValue('1850')
+  await expect(page.getByLabel('Description')).toHaveValue('My own words.')
+  await expect(page.getByTestId('price')).toHaveValue('')
+  await expect(page.getByTestId('margin')).toHaveCount(0)
+})
+
+test('"Fill for me" refuses without a session', async ({ playwright, baseURL }) => {
+  const anon = await playwright.request.newContext({ baseURL })
+  const res = await anon.post('/admin/autofill', { data: { text: 'Soft silk saree' } })
+  expect(res.status()).toBe(401)
+  await anon.dispose()
+})
+
 test('uploading without a session is refused', async ({ playwright }) => {
   const anon = await playwright.request.newContext({ baseURL: test.info().project.use.baseURL })
   const res = await anon.post('/admin/upload', { multipart: { batchId: 'abcdefgh-1234', file: { name: 'x.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('x') } } })

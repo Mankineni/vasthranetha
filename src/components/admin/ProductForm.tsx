@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
 import { saveProduct, type SaveState } from '@/app/admin/(app)/products/actions'
+import { applySuggestion, type Suggestion } from '@/lib/autofill/suggestion'
 import { orderMediaIds, type FormValues, type ProductIntent, type ProductPayload } from '@/lib/catalogue/form'
 import type { MediaItem, ProductStatus } from '@/lib/catalogue/types'
 import { ChipInput } from './ChipInput'
@@ -24,6 +25,57 @@ type Props = {
   rejected?: number
   /** A share kept on the phone by the service worker. */
   sharedId?: string
+  /** Shows the "Fill for me" box (only when an API key is configured). */
+  autofillEnabled?: boolean
+}
+
+function DealerMessage({ onSuggestion }: { onSuggestion: (s: Suggestion) => void }) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function fill() {
+    if (!text.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/admin/autofill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.suggestion) throw new Error(data.error ?? 'failed')
+      onSuggestion(data.suggestion)
+    } catch {
+      setError('Could not read that message. Please fill the fields yourself.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-line bg-surface p-4">
+      <label className="block">
+        <span className="text-sm font-medium text-ink">Dealer&apos;s message</span>
+        <span className="block text-xs text-muted">Paste the dealer&apos;s text and tap “Fill for me”. Only empty fields are filled; check them before publishing.</span>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} className={inputClass} />
+      </label>
+      <button
+        type="button"
+        onClick={fill}
+        disabled={busy || !text.trim()}
+        className="mt-2 rounded-full border border-accent px-4 py-2 text-sm font-medium text-accent disabled:opacity-50"
+      >
+        {busy ? 'Reading…' : 'Fill for me'}
+      </button>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  )
 }
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', 'XXL']
@@ -128,6 +180,10 @@ export function ProductForm(props: Props) {
         <h2 className="mb-2 font-display text-xl font-semibold">Photos</h2>
         <PhotoPicker items={items} onChange={setItems} batchId={props.batchId} sharedId={props.sharedId} />
       </section>
+
+      {props.autofillEnabled && (
+        <DealerMessage onSuggestion={(s) => setValues((v) => applySuggestion(v, s, fabrics))} />
+      )}
 
       <section className="space-y-4">
         <h2 className="font-display text-xl font-semibold">Details</h2>

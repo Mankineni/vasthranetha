@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getDb } from '@/db/client'
 import { requireOwner } from '@/lib/auth/guard'
+import { isAutofillEnabled } from '@/lib/autofill/autofill'
 import { getAdminProduct } from '@/lib/catalogue/admin'
 import { productPath } from '@/lib/catalogue/codes'
 import { fromAdminProduct } from '@/lib/catalogue/form'
@@ -44,6 +45,7 @@ export default async function EditProductPage({ params }: Props) {
         initialMedia={product.media}
         batchId={randomUUID()}
         submitToken={product.submitToken || randomUUID()}
+        autofillEnabled={isAutofillEnabled()}
         {...formOptions(getDb())}
       />
     </div>

@@ -15,6 +15,7 @@
     "e2e": "tsx scripts/e2e-prepare.ts && playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@node-rs/argon2": "^2.2.2",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",

@@ -6,6 +6,8 @@ import * as schema from './schema'
 import { runMigrations } from './migrate'
 
 export type Db = BetterSQLite3Database<typeof schema>
+/** A transaction handle; units that may run inside a transaction accept `Db | Tx`. */
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
 
 export function openDb(file: string): Db {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true })

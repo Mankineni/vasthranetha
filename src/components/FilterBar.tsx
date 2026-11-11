@@ -4,10 +4,12 @@ import { usePathname, useRouter } from 'next/navigation'
 
 type Option = { value: string; label: string }
 
-export type FilterState = { fabric?: string; occasion?: string; band?: string; sort?: string; q?: string }
+export type FilterState = { category?: string; fabric?: string; occasion?: string; band?: string; sort?: string; q?: string }
 
 type Props = {
   current: FilterState
+  /** Omitted on category pages, where the category is the page itself. */
+  categories?: Option[]
   fabrics: Option[]
   occasions: Option[]
   /** Omitted on price-band pages, where the band is the page itself. */
@@ -20,7 +22,7 @@ const SORTS: Option[] = [
   { value: 'price-desc', label: 'Price: high to low' },
 ]
 
-export function FilterBar({ current, fabrics, occasions, bands }: Props) {
+export function FilterBar({ current, categories, fabrics, occasions, bands }: Props) {
   const router = useRouter()
   const pathname = usePathname()
 
@@ -55,6 +57,7 @@ export function FilterBar({ current, fabrics, occasions, bands }: Props) {
 
   return (
     <div className="mb-5 grid grid-cols-2 gap-3 sm:flex">
+      {categories && categories.length > 1 && select('category', 'Category', categories, 'All categories')}
       {fabrics.length > 0 && select('fabric', 'Fabric', fabrics, 'All fabrics')}
       {occasions.length > 0 && select('occasion', 'Occasion', occasions, 'All occasions')}
       {bands && bands.length > 0 && select('band', 'Price', bands, 'Any price')}

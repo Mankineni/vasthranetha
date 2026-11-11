@@ -103,6 +103,12 @@ test('outdated name and upper-case code redirect to the current address', async 
   }
 })
 
+test('old addresses redirect temporarily, so a later rename back cannot trap a browser in a loop', async ({ request }) => {
+  const res = await request.get(`/p/${seedCode(SAREE).toLowerCase()}-old-name`, { maxRedirects: 0 })
+  expect(res.status()).toBe(307)
+  expect(res.headers()['location']).toBe(pathOf(SAREE))
+})
+
 test('a draft code and an unknown code are not found', async ({ page }) => {
   for (const path of [`/p/${seedCode(DRAFT).toLowerCase()}`, '/p/s-999999', '/p/hello']) {
     const res = await page.goto(path)

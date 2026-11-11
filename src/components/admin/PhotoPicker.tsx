@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { MAX_PHOTOS, MAX_VIDEOS, type MediaItem } from '@/lib/catalogue/types'
+import { precheckUpload } from '@/lib/media/limits'
 import { variantAtLeast } from '@/lib/media/urls'
 import { readSharedFiles } from './sharedFiles'
 
@@ -44,15 +45,17 @@ export function displayOrder(items: PhotoItem[]): PhotoItem[] {
   return [...items.filter((i) => i.kind === 'photo'), ...items.filter((i) => i.kind === 'video')]
 }
 
-async function uploadFile(file: File, batchId: string): Promise<Partial<PhotoItem>> {
+async function uploadFile(file: File, batchId: string, signal: AbortSignal): Promise<Partial<PhotoItem>> {
   const body = new FormData()
   body.set('file', file)
   body.set('batchId', batchId)
   try {
-    const res = await fetch('/admin/upload', { method: 'POST', body })
+    const res = await fetch('/admin/upload', { method: 'POST', body, signal })
     const data = await res.json().catch(() => ({}))
     if (res.status === 401) return { status: 'failed', retryable: true, error: 'Please sign in again, then retry.' }
-    if (res.status === 400) return { status: 'failed', retryable: false, error: data.error ?? 'This file cannot be used.' }
+    if (res.status === 400 || res.status === 413) {
+      return { status: 'failed', retryable: false, error: data.error ?? 'This file cannot be used.' }
+    }
     if (!res.ok) return { status: 'failed', retryable: true, error: 'Upload failed. Tap Retry.' }
     return { status: 'done', media: data.media, kind: data.media.kind, lowRes: Boolean(data.lowRes), error: undefined }
   } catch {
@@ -63,32 +66,24 @@ async function uploadFile(file: File, batchId: string): Promise<Partial<PhotoIte
 export function PhotoPicker({ items, onChange, batchId, sharedId }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const queue = useRef<Promise<void>>(Promise.resolve())
+  // One per waiting or running upload, so removing a tile stops its upload.
+  const controllers = useRef(new Map<string, AbortController>())
   const [notice, setNotice] = useState<string | null>(null)
   const shown = displayOrder(items)
-
-  useEffect(() => {
-    if (!sharedId) return
-    let cancelled = false
-    readSharedFiles(sharedId).then(({ files, discard }) => {
-      if (cancelled) return
-      if (files.length) add(files)
-      else setNotice('The shared photos were not found on this phone. Please share them again.')
-      void discard()
-    })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the share that opened the form
-  }, [sharedId])
 
   const update = (key: string, patch: Partial<PhotoItem>) =>
     onChange((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)))
 
   // One upload at a time: gentle on phone data and on the server.
   function enqueue(item: PhotoItem) {
+    const controller = new AbortController()
+    controllers.current.set(item.key, controller)
     queue.current = queue.current.then(async () => {
+      if (controller.signal.aborted) return // removed while waiting its turn
       update(item.key, { status: 'uploading' })
-      update(item.key, await uploadFile(item.file!, batchId))
+      const result = await uploadFile(item.file!, batchId, controller.signal)
+      controllers.current.delete(item.key)
+      if (!controller.signal.aborted) update(item.key, result)
     })
   }
 
@@ -101,6 +96,12 @@ export function PhotoPicker({ items, onChange, batchId, sharedId }: Props) {
     let skipped = 0
     for (const file of Array.from(files)) {
       const kind = file.type.startsWith('video/') ? 'video' : 'photo'
+      // Refuse wrong types and oversized files here, before sending a byte over mobile data.
+      const refused = precheckUpload(file)
+      if (refused) {
+        added.push({ key: newKey(), kind, status: 'failed', name: file.name, error: refused, retryable: false })
+        continue
+      }
       if ((kind === 'photo' && photos >= MAX_PHOTOS) || (kind === 'video' && videos >= MAX_VIDEOS)) {
         skipped++
         continue
@@ -118,11 +119,13 @@ export function PhotoPicker({ items, onChange, batchId, sharedId }: Props) {
     }
     setNotice(skipped ? `Up to ${MAX_PHOTOS} photos and one video per product. ${skipped} file(s) were skipped.` : null)
     onChange((list) => [...list, ...added])
-    added.forEach(enqueue)
+    added.filter((i) => i.status === 'queued').forEach(enqueue)
     if (input.current) input.current.value = ''
   }
 
   function remove(item: PhotoItem) {
+    controllers.current.get(item.key)?.abort()
+    controllers.current.delete(item.key)
     if (item.file && item.preview) URL.revokeObjectURL(item.preview)
     onChange((list) => list.filter((i) => i.key !== item.key))
   }
@@ -144,6 +147,22 @@ export function PhotoPicker({ items, onChange, batchId, sharedId }: Props) {
       return [...photos, ...rest]
     })
   }
+
+  // Photos shared from WhatsApp and kept on the phone by the service worker.
+  useEffect(() => {
+    if (!sharedId) return
+    let cancelled = false
+    readSharedFiles(sharedId).then(({ files, discard }) => {
+      if (cancelled) return
+      if (files.length) add(files)
+      else setNotice('The shared photos were not found on this phone. Please share them again.')
+      void discard()
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for the share that opened the form
+  }, [sharedId])
 
   const photoCount = shown.filter((i) => i.kind === 'photo').length
   const anyLowRes = shown.some((i) => i.lowRes)

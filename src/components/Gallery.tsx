@@ -1,12 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import type { MediaItem } from '@/lib/catalogue/types'
+import type { PublicPhoto, PublicVideo } from '@/lib/catalogue/public'
 import { mediaUrl, variantAtLeast } from '@/lib/media/urls'
 import { ResponsiveImage } from './ResponsiveImage'
 import { ZoomViewer } from './ZoomViewer'
 
-type Props = { photos: MediaItem[]; video: MediaItem | null; name: string; sold: boolean }
+type Props = { photos: PublicPhoto[]; video: PublicVideo | null; name: string; sold: boolean }
 
 /** Swipeable photos (CSS scroll-snap, no carousel library). Tap a photo to open the zoom viewer. */
 export function Gallery({ photos, video, name, sold }: Props) {
@@ -69,7 +69,7 @@ export function Gallery({ photos, video, name, sold }: Props) {
               preload="metadata"
               poster={poster ?? undefined}
               className="h-full w-full object-contain"
-              src={mediaUrl(video.originalPath)}
+              src={mediaUrl(video.path)}
             >
               Your browser cannot play this video.
             </video>

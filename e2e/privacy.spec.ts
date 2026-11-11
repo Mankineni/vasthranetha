@@ -42,6 +42,14 @@ test('dealer details never reach a signed-out visitor, and admin is closed to th
     for (const secret of SECRETS) expect(body, `${url} leaks ${secret}`).not.toContain(secret)
   }
 
+  // Photo originals keep the camera's EXIF data (GPS location included), so only processed versions are served.
+  const page2 = await request.get(card.path)
+  const variant = /\/media\/[0-9a-f]{2}\/[0-9a-f]{64}-\d+\.webp/.exec(await page2.text())![0]
+  for (const ext of ['jpg', 'png', 'webp']) {
+    expect((await request.get(variant.replace(/-\d+\.webp$/, `-orig.${ext}`))).status(), ext).toBe(404)
+  }
+  expect((await request.get(variant)).status()).toBe(200)
+
   const adminPages = [
     '/admin',
     '/admin/products',

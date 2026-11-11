@@ -148,6 +148,18 @@ test('a new fabric appears in the public filter', async ({ page }) => {
   await expect(page.getByLabel('Fabric').locator('option', { hasText: 'Organza' })).toHaveCount(1)
 })
 
+test('saving the price bands keeps existing /price links working', async ({ page }) => {
+  await page.goto('/')
+  const href = (await page.getByTestId('price-bands').getByRole('link').first().getAttribute('href'))!
+  await page.goto('/admin/settings/bands')
+  await page.getByTestId('band-row').first().getByLabel('Label').fill('Under ₹999 (edited)')
+  await page.getByRole('button', { name: 'Save price bands' }).click()
+  await expect(page.getByText('Saved.')).toBeVisible()
+  const res = await page.goto(href)
+  expect(res?.status()).toBe(200)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Under ₹999 (edited)')
+})
+
 test('replacing the price bands changes the home page', async ({ page }) => {
   await page.goto('/admin/settings/bands')
   const rows = page.getByTestId('band-row')

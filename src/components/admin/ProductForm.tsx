@@ -1,5 +1,6 @@
 'use client'
 
+import { unstable_rethrow } from 'next/navigation'
 import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
 import { saveProduct, type SaveState } from '@/app/admin/(app)/products/actions'
 import { applySuggestion, type Suggestion } from '@/lib/autofill/suggestion'
@@ -17,7 +18,6 @@ type Props = {
   initialValues: FormValues
   initialMedia: MediaItem[]
   batchId: string
-  submitToken: string
   categories: Option[]
   fabrics: Option[]
   occasions: Option[]
@@ -80,6 +80,31 @@ function DealerMessage({ onSuggestion }: { onSuggestion: (s: Suggestion) => void
 
 const STANDARD_SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
+const SAVE_FAILED = 'Could not save. Check your connection and try again.'
+
+/**
+ * A new random id each time the form opens. It makes a double tap or a retry harmless
+ * (the server saves onto the product this form already created), while a form reopened
+ * with Back always creates a new product. crypto.randomUUID needs a secure page, so
+ * getRandomValues is the fallback.
+ */
+function newSubmitToken(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Calls the save action; a lost connection or server failure becomes a message, not a lost form. */
+async function saveOrExplain(prev: SaveState, form: FormData): Promise<SaveState> {
+  try {
+    return await saveProduct(prev, form)
+  } catch (err) {
+    // After a successful save the action "fails" with Next's redirect to the list: let it through.
+    unstable_rethrow(err)
+    console.error('save failed', err)
+    return { errors: [SAVE_FAILED] }
+  }
+}
+
 const inputClass = 'mt-1 block w-full rounded-md border border-line bg-surface px-3 py-2.5 text-base text-ink'
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -109,7 +134,8 @@ export function ProductForm(props: Props) {
   const { productId, status, categories, fabrics, occasions } = props
   const [values, setValues] = useState<FormValues>(props.initialValues)
   const [items, setItems] = useState<PhotoItem[]>(() => props.initialMedia.map((m) => itemFromMedia(m)))
-  const [state, formAction, pending] = useActionState<SaveState, FormData>(saveProduct, { errors: [] })
+  const [submitToken] = useState(newSubmitToken)
+  const [state, formAction, pending] = useActionState<SaveState, FormData>(saveOrExplain, { errors: [] })
   const [localError, setLocalError] = useState<string | null>(null)
   const submitting = useRef(false)
   const errorBox = useRef<HTMLDivElement>(null)
@@ -138,7 +164,7 @@ export function ProductForm(props: Props) {
     const payload: ProductPayload = {
       id: productId,
       intent,
-      submitToken: props.submitToken,
+      submitToken,
       mediaIds: orderMediaIds(done),
       values,
     }

@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { and, eq, gt, lt } from 'drizzle-orm'
 import type { Db } from '@/db/client'
 import { loginAttempts, sessions, users } from '@/db/schema'
+import { normaliseWhatsAppNumber } from '@/lib/whatsapp/message'
 import { hashPassword, verifyPassword } from './password'
 
 export const SESSION_COOKIE = 'bq_session'
@@ -15,8 +16,14 @@ const MIN_PASSWORD = 10
 let dummyHash: Promise<string> | null = null
 const getDummyHash = () => (dummyHash ??= hashPassword('dummy-password-for-timing'))
 
+/**
+ * Emails are matched case-insensitively. A phone-number login is reduced to one form,
+ * so "+91 98765 43210", "098765 43210" and "9876543210" are the same login.
+ */
 export function normaliseLogin(login: string): string {
-  return login.trim().toLowerCase()
+  const trimmed = login.trim().toLowerCase()
+  if (trimmed.includes('@')) return trimmed
+  return normaliseWhatsAppNumber(trimmed) ?? trimmed
 }
 
 function tokenHash(token: string): string {
@@ -37,6 +44,20 @@ export async function createOwner(
   const passwordHash = await hashPassword(input.password)
   const row = db.insert(users).values({ name: input.name.trim(), login, passwordHash }).returning({ id: users.id }).get()
   return { id: row.id }
+}
+
+/** Sets a new password for an existing owner and ends all of their sessions. */
+export async function resetPassword(db: Db, rawLogin: string, password: string): Promise<void> {
+  if (password.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+  const login = normaliseLogin(rawLogin)
+  const user = db.select({ id: users.id }).from(users).where(eq(users.login, login)).get()
+  if (!user) throw new Error(`No owner with login ${login}.`)
+  const passwordHash = await hashPassword(password)
+  db.transaction((tx) => {
+    tx.update(users).set({ passwordHash }).where(eq(users.id, user.id)).run()
+    tx.delete(sessions).where(eq(sessions.userId, user.id)).run()
+    tx.delete(loginAttempts).where(eq(loginAttempts.login, login)).run()
+  })
 }
 
 export async function signIn(

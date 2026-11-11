@@ -47,6 +47,21 @@ test('fabric filter narrows the list and lands in the URL', async ({ page }) => 
   for (const p of cotton) await expect(page.locator(cards, { hasText: p.name })).toBeVisible()
 })
 
+test('new arrivals can be filtered by category', async ({ page }) => {
+  await page.goto('/new')
+  await page.getByLabel('Category').selectOption('dresses')
+  await expect(page).toHaveURL(/category=dresses/)
+  const dresses = listedSeed.filter((p) => p.category === 'Dresses')
+  await expect(page.locator(cards)).toHaveCount(dresses.length)
+  for (const p of dresses) await expect(page.locator(cards, { hasText: p.name })).toBeVisible()
+})
+
+test('a category page has no category filter (it is the category)', async ({ page }) => {
+  await page.goto('/c/sarees')
+  await expect(page.getByLabel('Fabric')).toBeVisible()
+  await expect(page.getByLabel('Category')).toHaveCount(0)
+})
+
 test('sort by price puts the cheapest saree first', async ({ page }) => {
   await page.goto('/c/sarees')
   await page.getByLabel('Sort').selectOption('price-asc')

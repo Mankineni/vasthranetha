@@ -1,8 +1,9 @@
-// Creates an owner account. Run on the server:
+// Creates an owner account, or resets a forgotten password. Run on the server:
 //   npm run create-owner -- --name "Asha" --login "asha@example.com"
-// The password is asked for and not shown while typing.
+//   npm run create-owner -- --login "asha@example.com" --reset
+// The password is asked for and not shown while typing. A reset signs the owner out everywhere.
 import { getDb } from '@/db/client'
-import { createOwner } from '@/lib/auth/sessions'
+import { createOwner, resetPassword } from '@/lib/auth/sessions'
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
@@ -51,16 +52,23 @@ function askHidden(question: string): Promise<string> {
 async function main() {
   const name = arg('name')
   const login = arg('login')
-  if (!name || !login) {
+  const reset = process.argv.includes('--reset')
+  if (!login || (!reset && !name)) {
     console.error('Usage: npm run create-owner -- --name "Asha" --login "asha@example.com"')
+    console.error('       npm run create-owner -- --login "asha@example.com" --reset')
     process.exit(1)
   }
-  const password = await askHidden('Password (at least 10 characters): ')
+  const password = await askHidden(reset ? 'New password (at least 10 characters): ' : 'Password (at least 10 characters): ')
   if (process.stdin.isTTY) {
     const again = await askHidden('Repeat password: ')
     if (again !== password) throw new Error('The passwords do not match.')
   }
-  const { id } = await createOwner(getDb(), { name, login, password })
+  if (reset) {
+    await resetPassword(getDb(), login, password)
+    console.log(`Password for ${login} changed. They are signed out on every device.`)
+    return
+  }
+  const { id } = await createOwner(getDb(), { name: name!, login, password })
   console.log(`Owner ${name} created (id ${id}). Sign in at /admin/login.`)
 }
 

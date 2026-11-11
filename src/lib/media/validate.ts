@@ -1,14 +1,10 @@
 import { fileTypeFromBuffer } from 'file-type'
+import { MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, REASON_PHOTO_SIZE, REASON_TYPE, REASON_VIDEO_SIZE } from './limits'
+
+export { MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, REASON_PHOTO_SIZE, REASON_TYPE, REASON_VIDEO_SIZE } from './limits'
 
 export type UploadKind = 'photo' | 'video'
 export type UploadExt = 'jpg' | 'png' | 'webp' | 'mp4'
-
-export const MAX_PHOTO_BYTES = 25 * 1024 * 1024
-export const MAX_VIDEO_BYTES = 20 * 1024 * 1024
-
-export const REASON_TYPE = 'This file type is not supported. Use JPEG, PNG or WebP photos, or MP4 video.'
-export const REASON_PHOTO_SIZE = 'Photo is larger than 25 MB.'
-export const REASON_VIDEO_SIZE = 'Video is larger than 20 MB.'
 
 const KINDS: Record<string, { kind: UploadKind; ext: UploadExt }> = {
   jpg: { kind: 'photo', ext: 'jpg' },

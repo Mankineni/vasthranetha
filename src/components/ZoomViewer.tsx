@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { MediaItem } from '@/lib/catalogue/types'
+import type { PublicPhoto } from '@/lib/catalogue/public'
 import { largestVariant } from '@/lib/media/urls'
 
-type Props = { photos: MediaItem[]; start: number; alt: string; onClose: () => void }
+type Props = { photos: PublicPhoto[]; start: number; alt: string; onClose: () => void }
 type View = { s: number; tx: number; ty: number }
 
 const MAX_SCALE = 4

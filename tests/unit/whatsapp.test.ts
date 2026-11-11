@@ -45,9 +45,17 @@ test.each([
   ['098765 43210', '919876543210'],
   ['9876543210', '919876543210'],
   ['919876543210', '919876543210'],
+  ['0091 98765 43210', '919876543210'],
+  ['+91 0 98765 43210', '919876543210'],
+  ['+91-6000-123456', '916000123456'],
   ['12345', null],
   ['', null],
   ['abc', null],
+  // Indian mobile numbers start with 6, 7, 8 or 9; anything else would leave every order link dead.
+  ['1234567890', null],
+  ['5876543210', null],
+  ['+91 1234567890', null],
+  ['+44 7911 123456', null],
 ])('normaliseWhatsAppNumber(%s) → %s', (input, out) => {
   expect(normaliseWhatsAppNumber(input)).toBe(out)
 })

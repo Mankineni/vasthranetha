@@ -147,6 +147,7 @@ test('product detail and related products', () => {
   })
   expect(p.photos.map((m) => m.id)).toEqual([p1, p2])
   expect(p.video?.id).toBe(video)
+  expect(p.video?.path).toMatch(/-orig\.jpg$/)
   expect(p.cover?.id).toBe(p1)
 
   const related = relatedProducts(db, main.code)
@@ -166,6 +167,17 @@ test('sitemap entries are the available products only', () => {
   expect(listSitemapEntries(db)).toEqual([
     { path: `/p/${live.code.toLowerCase()}-live-one`, updatedAt: NOW - 2 * DAY },
   ])
+})
+
+test('public media never expose a photo original; a video gives its playable path', () => {
+  const { db, sarees, add } = setup()
+  const photo = makeMediaRow(db, 'photo', 'ab/photohash-orig.jpg')
+  const video = makeMediaRow(db, 'video', 'cd/videohash-orig.mp4')
+  const p = add(sarees, { mediaIds: [photo, video] })
+  const out = JSON.stringify([getPublicProduct(db, p.code), listPublicProducts(db, { now: NOW }), relatedProducts(db, p.code)])
+  expect(out).not.toContain('photohash-orig')
+  expect(out).not.toContain('originalPath')
+  expect(getPublicProduct(db, p.code)!.video).toEqual({ id: video, path: 'cd/videohash-orig.mp4' })
 })
 
 test('dealer fields never leave the public functions', () => {

@@ -5,6 +5,7 @@ import {
   createOwner,
   getSessionUser,
   LOCKOUT_FAILURES,
+  resetPassword,
   LOCKOUT_WINDOW_MS,
   SESSION_COOKIE,
   SESSION_TTL_MS,
@@ -98,6 +99,27 @@ test('the database never stores the raw session token', async () => {
   const rows = db.select().from(sessions).all()
   expect(rows).toHaveLength(1)
   expect(JSON.stringify(rows)).not.toContain(r.token)
+})
+
+test('a phone-number login works however the number is typed', async () => {
+  const db = createTestDb()
+  await createOwner(db, { name: 'Meera', login: '+91 98765 43210', password: PASSWORD })
+  for (const typed of ['9876543210', '098765 43210', '919876543210', '+91-98765-43210']) {
+    expect((await signIn(db, typed, PASSWORD, NOW)).ok, typed).toBe(true)
+  }
+  await expect(createOwner(db, { name: 'Dup', login: '9876543210', password: PASSWORD })).rejects.toThrow(/exists/)
+})
+
+test('resetPassword sets a new password and signs the owner out everywhere', async () => {
+  const { db } = await setup()
+  const before = await signIn(db, 'asha@example.com', PASSWORD, NOW)
+  if (!before.ok) throw new Error('expected sign-in')
+  await resetPassword(db, 'ASHA@example.com', 'a-brand-new-password')
+  expect(getSessionUser(db, before.token, NOW)).toBeNull()
+  expect(await signIn(db, 'asha@example.com', PASSWORD, NOW)).toEqual({ ok: false, reason: 'invalid' })
+  expect((await signIn(db, 'asha@example.com', 'a-brand-new-password', NOW)).ok).toBe(true)
+  await expect(resetPassword(db, 'nobody@example.com', 'a-brand-new-password')).rejects.toThrow(/No owner/)
+  await expect(resetPassword(db, 'asha@example.com', 'short')).rejects.toThrow(/10 characters/)
 })
 
 test('createOwner rejects duplicates and short passwords', async () => {

@@ -4,13 +4,14 @@ import { useState, useTransition } from 'react'
 import { saveBands } from '@/app/admin/(app)/settings/actions'
 import { ErrorText, inputClass, Saved } from './ui'
 
-type Band = { key: number; label: string; min: string; max: string }
+/** `id` is set for stored bands so saving keeps their /price/<id> addresses. */
+type Band = { key: number; id?: number; label: string; min: string; max: string }
 
-let nextKey = 1000
+let nextKey = -1
 
-export function PriceBandEditor({ initial }: { initial: { label: string; min: number; max: number | null }[] }) {
+export function PriceBandEditor({ initial }: { initial: { id: number; label: string; min: number; max: number | null }[] }) {
   const [bands, setBands] = useState<Band[]>(() =>
-    initial.map((b, i) => ({ key: i, label: b.label, min: String(b.min), max: b.max === null ? '' : String(b.max) })),
+    initial.map((b) => ({ key: b.id, id: b.id, label: b.label, min: String(b.min), max: b.max === null ? '' : String(b.max) })),
   )
   const [result, setResult] = useState<{ ok: boolean; error: string | null } | null>(null)
   const [pending, startTransition] = useTransition()
@@ -49,7 +50,7 @@ export function PriceBandEditor({ initial }: { initial: { label: string; min: nu
         <button
           type="button"
           className="rounded-full border border-line px-4 py-2 text-sm"
-          onClick={() => setBands((list) => [...list, { key: nextKey++, label: '', min: '', max: '' }])}
+          onClick={() => setBands((list) => [...list, { key: nextKey--, label: '', min: '', max: '' }])}
         >
           Add band
         </button>
@@ -57,7 +58,7 @@ export function PriceBandEditor({ initial }: { initial: { label: string; min: nu
           type="button"
           disabled={pending}
           className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink disabled:opacity-60"
-          onClick={() => startTransition(async () => setResult(await saveBands(bands.map(({ label, min, max }) => ({ label, min, max })))))}
+          onClick={() => startTransition(async () => setResult(await saveBands(bands.map(({ id, label, min, max }) => ({ id, label, min, max })))))}
         >
           {pending ? 'Saving…' : 'Save price bands'}
         </button>

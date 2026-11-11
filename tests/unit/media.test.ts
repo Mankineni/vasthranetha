@@ -283,6 +283,15 @@ describe('serveMedia', () => {
     expect(body.equals(fs.readFileSync(path.join(mediaDir, m.variants[0].path)))).toBe(true)
   })
 
+  test('photo originals are never served (they can carry GPS and camera data); video originals are', async () => {
+    const m = await stored()
+    expect((await get(m.originalPath)).status).toBe(404)
+    expect((await get(m.originalPath.replace(/\.jpg$/, '.png'))).status).toBe(404)
+    const db = createTestDb()
+    const v = await saveVideo(db, mp4Header(), { batchId: 'b', mediaDir, now: 1 })
+    expect((await get(v.originalPath)).status).toBe(200)
+  })
+
   test('.. and missing files are 404', async () => {
     await stored()
     expect((await get('../secret.txt')).status).toBe(404)
@@ -292,15 +301,16 @@ describe('serveMedia', () => {
 
   test('byte ranges for video seeking', async () => {
     const m = await stored()
-    const full = fs.readFileSync(path.join(mediaDir, m.originalPath))
-    const res = await get(m.originalPath, { range: 'bytes=0-99' })
+    const file = m.variants[m.variants.length - 1].path
+    const full = fs.readFileSync(path.join(mediaDir, file))
+    const res = await get(file, { range: 'bytes=0-99' })
     expect(res.status).toBe(206)
     expect(res.headers.get('content-range')).toBe(`bytes 0-99/${full.length}`)
     expect(Buffer.from(await res.arrayBuffer()).equals(full.subarray(0, 100))).toBe(true)
 
-    const tail = await get(m.originalPath, { range: 'bytes=-10' })
+    const tail = await get(file, { range: 'bytes=-10' })
     expect(Buffer.from(await tail.arrayBuffer()).equals(full.subarray(full.length - 10))).toBe(true)
 
-    expect((await get(m.originalPath, { range: `bytes=${full.length + 5}-` })).status).toBe(416)
+    expect((await get(file, { range: `bytes=${full.length + 5}-` })).status).toBe(416)
   })
 })

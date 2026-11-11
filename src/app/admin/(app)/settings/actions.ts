@@ -150,7 +150,7 @@ export async function removeListItem(kind: 'fabric' | 'occasion', id: number): P
 // --- price bands ---
 
 export async function saveBands(
-  bands: { label: string; min: string; max: string }[],
+  bands: { id?: number; label: string; min: string; max: string }[],
 ): Promise<{ ok: boolean; error: string | null }> {
   await requireOwner()
   const parsed = []
@@ -158,7 +158,7 @@ export async function saveBands(
     const min = b.min.trim() === '' ? 0 : /^\d+$/.test(b.min.trim()) ? Number(b.min) : NaN
     const max = b.max.trim() === '' ? null : /^\d+$/.test(b.max.trim()) ? Number(b.max) : NaN
     if (Number.isNaN(min) || Number.isNaN(max)) return { ok: false, error: 'Prices must be whole rupees.' }
-    parsed.push({ label: b.label.slice(0, 60), min, max })
+    parsed.push({ id: Number.isInteger(b.id) ? b.id : undefined, label: b.label.slice(0, 60), min, max })
   }
   const r = savePriceBands(getDb(), parsed)
   if (!r.ok) return { ok: false, error: r.error }

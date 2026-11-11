@@ -10,6 +10,7 @@ import {
   getAdminProduct,
   listAdminProducts,
   productIdsByCode,
+  ProductError,
   setStatus,
   updateProduct,
   validateProductInput,
@@ -31,6 +32,32 @@ test('200 products across two categories get 200 distinct codes', () => {
     codes.add(p.code)
   }
   expect(codes.size).toBe(200)
+})
+
+test('a repeated submitToken saves the latest values onto the same product instead of dropping them', () => {
+  const { db, sarees, user } = setup()
+  const token = 'tok-repeat-1234'
+  const first = createProduct(db, makeInput(sarees, { name: 'First try', submitToken: token }), user, { publish: false, now: 1 })
+  const again = createProduct(
+    db,
+    makeInput(sarees, { name: 'Second try', price: 2222, submitToken: token, mediaIds: [makeMediaRow(db)] }),
+    user,
+    { publish: true, now: 2 },
+  )
+  expect(again.id).toBe(first.id)
+  expect(again).toMatchObject({ name: 'Second try', price: 2222, status: 'available', publishedAt: 2 })
+  expect(db.select().from(products).all()).toHaveLength(1)
+})
+
+test('choosing a fabric or occasion that was just deleted gives a clear error, not a crash', () => {
+  const { db, sarees, user } = setup()
+  expect(() => createProduct(db, makeInput(sarees, { fabricId: 424242 }), user, { publish: false, now: 1 })).toThrow(ProductError)
+  expect(() => createProduct(db, makeInput(sarees, { occasionIds: [434343] }), user, { publish: false, now: 1 })).toThrow(
+    /removed/,
+  )
+  const p = createProduct(db, makeInput(sarees), user, { publish: false, now: 1 })
+  expect(() => updateProduct(db, p.id, makeInput(sarees, { fabricId: 424242 }), user, 2)).toThrow(ProductError)
+  expect(db.select().from(products).all()).toHaveLength(1)
 })
 
 test('the same submitToken twice returns the same product and leaves one row', () => {

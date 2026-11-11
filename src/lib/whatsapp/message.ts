@@ -6,14 +6,18 @@ function oneLine(text: string): string {
 }
 
 /**
- * Accepts the ways people type an Indian mobile number and returns the
- * wa.me form (country code, no plus, no spaces), or null if it is not one.
+ * Accepts the ways people type an Indian mobile number ("+91 98765 43210",
+ * "098765 43210", "0091 98765 43210", "+91 0 98765 43210") and returns the wa.me
+ * form (country code, no plus, no spaces), or null if it is not an Indian mobile
+ * number. Indian mobile numbers have 10 digits starting with 6, 7, 8 or 9.
  */
 export function normaliseWhatsAppNumber(input: string): string | null {
   let digits = input.replace(/\D/g, '')
-  if (digits.startsWith('0')) digits = digits.slice(1)
+  if (digits.startsWith('00')) digits = digits.slice(2) // international prefix
+  if (digits.length === 13 && digits.startsWith('910')) digits = `91${digits.slice(3)}` // "+91 0..."
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1) // trunk prefix
   if (digits.length === 10) digits = `91${digits}`
-  return /^91\d{10}$/.test(digits) ? digits : null
+  return /^91[6-9]\d{9}$/.test(digits) ? digits : null
 }
 
 export function buildOrderMessage(p: {

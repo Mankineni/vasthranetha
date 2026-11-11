@@ -24,6 +24,9 @@ export async function serveMedia(req: Request, segments: string[], mediaDir: str
   if (!file.startsWith(root + path.sep)) return notFound()
   const type = TYPES[path.extname(file).toLowerCase()]
   if (!type) return notFound()
+  // Photo originals keep their camera metadata (GPS location, device). They stay on disk
+  // for regenerating sizes, but only the processed, metadata-free versions are served.
+  if (/-orig\.(jpe?g|png|webp)$/i.test(file)) return notFound()
 
   let size: number
   try {

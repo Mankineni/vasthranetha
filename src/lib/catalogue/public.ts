@@ -11,13 +11,17 @@ const DAY_MS = 86_400_000
 const DEFAULT_LIMIT = 24
 const MAX_LIMIT = 48
 
+/** A photo as the public sees it: processed versions only, never the original file. */
+export type PublicPhoto = Omit<MediaItem, 'originalPath'>
+export type PublicVideo = { id: number; path: string }
+
 export type PublicCard = {
   code: string
   path: string
   name: string
   price: number
   sold: boolean
-  cover: MediaItem | null
+  cover: PublicPhoto | null
 }
 
 export type PublicProduct = PublicCard & {
@@ -30,8 +34,8 @@ export type PublicProduct = PublicCard & {
   description: string
   sizes: string[]
   colours: string[]
-  photos: MediaItem[]
-  video: MediaItem | null
+  photos: PublicPhoto[]
+  video: PublicVideo | null
   publishedAt: number
 }
 
@@ -67,20 +71,12 @@ function listedCondition(db: Db, now: number): SQL {
   )!
 }
 
-function toItem(r: typeof media.$inferSelect): MediaItem {
-  return {
-    id: r.id,
-    kind: r.kind,
-    originalPath: r.originalPath,
-    width: r.width,
-    height: r.height,
-    variants: r.variants,
-    previewPath: r.previewPath,
-  }
+function toPhoto(r: typeof media.$inferSelect): PublicPhoto {
+  return { id: r.id, kind: r.kind, width: r.width, height: r.height, variants: r.variants, previewPath: r.previewPath }
 }
 
-function coversFor(db: Db, ids: number[]): Map<number, MediaItem> {
-  const covers = new Map<number, MediaItem>()
+function coversFor(db: Db, ids: number[]): Map<number, PublicPhoto> {
+  const covers = new Map<number, PublicPhoto>()
   if (!ids.length) return covers
   const rows = db
     .select()
@@ -88,7 +84,7 @@ function coversFor(db: Db, ids: number[]): Map<number, MediaItem> {
     .where(and(inArray(media.productId, ids), eq(media.kind, 'photo')))
     .orderBy(asc(media.position), asc(media.id))
     .all()
-  for (const r of rows) if (r.productId !== null && !covers.has(r.productId)) covers.set(r.productId, toItem(r))
+  for (const r of rows) if (r.productId !== null && !covers.has(r.productId)) covers.set(r.productId, toPhoto(r))
   return covers
 }
 
@@ -214,7 +210,7 @@ export function getPublicProduct(db: Db, code: string): PublicProduct | null {
     .where(eq(media.productId, row.id))
     .orderBy(asc(media.position), asc(media.id))
     .all()
-  const photos = mediaRows.filter((m) => m.kind === 'photo').map(toItem)
+  const photos = mediaRows.filter((m) => m.kind === 'photo').map(toPhoto)
   const videoRow = mediaRows.find((m) => m.kind === 'video')
 
   return {
@@ -234,7 +230,7 @@ export function getPublicProduct(db: Db, code: string): PublicProduct | null {
     sizes: row.sizes,
     colours: row.colours,
     photos,
-    video: videoRow ? toItem(videoRow) : null,
+    video: videoRow ? { id: videoRow.id, path: videoRow.originalPath } : null,
     publishedAt: row.publishedAt ?? 0,
   }
 }

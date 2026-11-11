@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound, permanentRedirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getDb } from '@/db/client'
 import { parseProductPath } from '@/lib/catalogue/codes'
 import { getPublicProduct, relatedProducts, type PublicProduct } from '@/lib/catalogue/public'
@@ -66,8 +66,11 @@ export default async function ProductPage({ params }: Props) {
   const { slug } = await params
   const p = load(slug)
   if (!p) notFound()
-  // Old names, upper-case codes and missing names all land on one address.
-  if (`/p/${slug}` !== p.path) permanentRedirect(p.path)
+  // Old names, upper-case codes and missing names all land on one address. The redirect is
+  // temporary on purpose: browsers cache permanent ones, and renaming a product A → B → A
+  // would then trap a returning visitor in a redirect loop. The canonical tag tells search
+  // engines which address is current.
+  if (`/p/${slug}` !== p.path) redirect(p.path)
 
   const db = getDb()
   const settings = getSettings(db)

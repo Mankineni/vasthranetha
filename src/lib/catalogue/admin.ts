@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { Db, Tx } from '@/db/client'
-import { categories, media, productOccasions, products } from '@/db/schema'
+import { categories, fabrics, media, occasions, productOccasions, products } from '@/db/schema'
 import { nextCode, slugify } from './codes'
 import {
   type AdminProduct,
@@ -64,11 +64,29 @@ function columnsFrom(input: ProductInput) {
   }
 }
 
-/** Database-dependent checks, then attaches media in the given order and detaches the rest. */
-function checkAndAttachMedia(tx: Tx, productId: number, input: ProductInput, publish: boolean): void {
-  if (!tx.select().from(categories).where(eq(categories.id, input.categoryId)).get()) {
-    throw new ProductError('Choose a category.')
+/**
+ * The chosen category, fabric and occasions must still exist: the other owner may have
+ * deleted one while this form was open. Runs before any write, so the owner gets a clear
+ * message instead of a database constraint error.
+ */
+function checkTaxonomy(tx: Tx, input: ProductInput): void {
+  if (!Number.isInteger(input.categoryId) || !tx.select().from(categories).where(eq(categories.id, input.categoryId)).get()) {
+    throw new ProductError('The category you chose was removed. Please choose a category.')
   }
+  if (input.fabricId !== null && !tx.select().from(fabrics).where(eq(fabrics.id, input.fabricId)).get()) {
+    throw new ProductError('The fabric you chose was removed. Please choose again.')
+  }
+  const occasionIds = [...new Set(input.occasionIds)]
+  if (occasionIds.length) {
+    const found = tx.select({ id: occasions.id }).from(occasions).where(inArray(occasions.id, occasionIds)).all()
+    if (found.length !== occasionIds.length) {
+      throw new ProductError('An occasion you chose was removed. Please choose again.')
+    }
+  }
+}
+
+/** Media checks, then attaches media in the given order and detaches the rest. */
+function checkAndAttachMedia(tx: Tx, productId: number, input: ProductInput, publish: boolean): void {
   const ids = [...new Set(input.mediaIds)]
   const rows = ids.length ? tx.select().from(media).where(inArray(media.id, ids)).all() : []
   if (rows.length !== ids.length) throw new ProductError('A photo is missing. Please upload it again.')
@@ -112,10 +130,18 @@ export function createProduct(
   opts: { publish: boolean; now: number },
 ): AdminProduct {
   const existing = db.select().from(products).where(eq(products.submitToken, input.submitToken)).get()
-  if (existing) return getAdminProduct(db, existing.id)!
+  if (existing) {
+    // The same form sent again (a double tap, or a retry after a lost connection):
+    // save its latest values onto the product it already created rather than drop them.
+    assertValid(input, opts.publish || existing.status !== 'draft')
+    updateProduct(db, existing.id, input, userId, opts.now)
+    if (opts.publish && existing.status === 'draft') setStatus(db, existing.id, 'available', userId, opts.now)
+    return getAdminProduct(db, existing.id)!
+  }
 
   assertValid(input, opts.publish)
   const id = db.transaction((tx) => {
+    checkTaxonomy(tx, input)
     const [row] = tx
       .insert(products)
       .values({
@@ -144,6 +170,7 @@ export function updateProduct(db: Db, id: number, input: ProductInput, userId: n
   const live = current.status !== 'draft'
   assertValid(input, live)
   db.transaction((tx) => {
+    checkTaxonomy(tx, input)
     tx.update(products)
       .set({ ...columnsFrom(input), updatedBy: userId, updatedAt: now })
       .where(eq(products.id, id))

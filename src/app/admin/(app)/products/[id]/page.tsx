@@ -44,7 +44,6 @@ export default async function EditProductPage({ params }: Props) {
         initialValues={fromAdminProduct(product)}
         initialMedia={product.media}
         batchId={randomUUID()}
-        submitToken={product.submitToken || randomUUID()}
         autofillEnabled={isAutofillEnabled()}
         {...formOptions(getDb())}
       />

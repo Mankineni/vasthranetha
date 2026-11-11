@@ -2,7 +2,7 @@ import { getDb } from '@/db/client'
 import { requestTime } from '@/lib/clock'
 import { listPublicProducts, type ListQuery } from '@/lib/catalogue/public'
 import { parseListParams, toApiQuery } from '@/lib/catalogue/query'
-import { listFabrics, listOccasions, listPriceBands } from '@/lib/catalogue/taxonomy'
+import { listCategories, listFabrics, listOccasions, listPriceBands } from '@/lib/catalogue/taxonomy'
 import { FilterBar } from './FilterBar'
 import { ProductGrid } from './ProductGrid'
 
@@ -20,11 +20,12 @@ export function ListingView({ title, subtitle, fixed, searchParams, showFilters 
   const db = getDb()
   const user = parseListParams(searchParams)
   const query = {
+    categorySlug: fixed.categorySlug ?? user.categorySlug,
     fabricSlug: user.fabricSlug,
     occasionSlug: user.occasionSlug,
     priceBandId: fixed.priceBandId ?? user.priceBandId,
     sort: user.sort,
-    ...fixed,
+    q: fixed.q,
   }
   const { items, total } = listPublicProducts(db, { ...query, now: requestTime() })
   const apiQuery = toApiQuery(query)
@@ -38,7 +39,16 @@ export function ListingView({ title, subtitle, fixed, searchParams, showFilters 
       </p>
       {showFilters && (
         <FilterBar
-          current={{ fabric: user.fabricSlug, occasion: user.occasionSlug, band: user.priceBandId?.toString(), sort: user.sort }}
+          current={{
+            category: fixed.categorySlug === undefined ? user.categorySlug : undefined,
+            fabric: user.fabricSlug,
+            occasion: user.occasionSlug,
+            band: user.priceBandId?.toString(),
+            sort: user.sort,
+          }}
+          categories={
+            fixed.categorySlug === undefined ? listCategories(db).map((c) => ({ value: c.slug, label: c.name })) : undefined
+          }
           fabrics={listFabrics(db).map((f) => ({ value: f.slug, label: f.name }))}
           occasions={listOccasions(db).map((o) => ({ value: o.slug, label: o.name }))}
           bands={

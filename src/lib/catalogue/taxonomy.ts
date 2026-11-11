@@ -127,7 +127,15 @@ export function listPriceBands(db: Db): PriceBand[] {
   return db.select().from(priceBands).orderBy(asc(priceBands.position), asc(priceBands.id)).all()
 }
 
-export function savePriceBands(db: Db, bands: { label: string; min: number; max: number | null }[]): Result {
+/**
+ * Replaces the list of bands in the given order. A band with the id of a stored band is
+ * updated in place, so its /price/<id> address keeps working; the others are added, and
+ * stored bands missing from the list are removed.
+ */
+export function savePriceBands(
+  db: Db,
+  bands: { id?: number; label: string; min: number; max: number | null }[],
+): Result {
   for (const b of bands) {
     if (!b.label.trim()) return { ok: false, error: 'Every price band needs a label.' }
     if (!Number.isInteger(b.min) || b.min < 0) return { ok: false, error: 'Minimum must be a whole number of rupees.' }
@@ -136,8 +144,18 @@ export function savePriceBands(db: Db, bands: { label: string; min: number; max:
     }
   }
   db.transaction((tx) => {
-    tx.delete(priceBands).run()
-    bands.forEach((b, i) => tx.insert(priceBands).values({ ...b, label: b.label.trim(), position: i }).run())
+    const stored = new Set(tx.select({ id: priceBands.id }).from(priceBands).all().map((r) => r.id))
+    const kept = new Set<number>()
+    bands.forEach((b, position) => {
+      const values = { label: b.label.trim(), min: b.min, max: b.max, position }
+      if (b.id !== undefined && stored.has(b.id) && !kept.has(b.id)) {
+        tx.update(priceBands).set(values).where(eq(priceBands.id, b.id)).run()
+        kept.add(b.id)
+      } else {
+        tx.insert(priceBands).values(values).run()
+      }
+    })
+    for (const id of stored) if (!kept.has(id)) tx.delete(priceBands).where(eq(priceBands.id, id)).run()
   })
   return { ok: true }
 }

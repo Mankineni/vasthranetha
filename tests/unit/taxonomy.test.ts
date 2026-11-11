@@ -65,6 +65,38 @@ test('fabrics and occasions: create, list, delete when in use', () => {
   expect(listOccasions(db)).toHaveLength(1)
 })
 
+test('saving price bands keeps the ids of bands that stay, so shared /price links keep working', () => {
+  const db = createTestDb()
+  savePriceBands(db, [
+    { label: 'Under ₹999', min: 0, max: 999 },
+    { label: 'Mid', min: 1000, max: 2499 },
+    { label: 'Top', min: 2500, max: null },
+  ])
+  const [under, mid, top] = listPriceBands(db)
+  // Saved again unchanged: same ids.
+  savePriceBands(db, listPriceBands(db).map(({ id, label, min, max }) => ({ id, label, min, max })))
+  expect(listPriceBands(db).map((b) => b.id)).toEqual([under.id, mid.id, top.id])
+  // Rename one, drop one, add one, reorder.
+  savePriceBands(db, [
+    { id: top.id, label: 'Premium', min: 2500, max: null },
+    { id: under.id, label: 'Budget', min: 0, max: 999 },
+    { label: 'Luxury', min: 10000, max: null },
+  ])
+  const after = listPriceBands(db)
+  expect(after.map((b) => [b.id === top.id, b.id === under.id, b.label])).toEqual([
+    [true, false, 'Premium'],
+    [false, true, 'Budget'],
+    [false, false, 'Luxury'],
+  ])
+  expect(after.some((b) => b.id === mid.id)).toBe(false)
+})
+
+test('an id that is not a stored band is treated as a new band', () => {
+  const db = createTestDb()
+  savePriceBands(db, [{ id: 9999, label: 'Odd', min: 0, max: 10 }])
+  expect(listPriceBands(db).map((b) => b.label)).toEqual(['Odd'])
+})
+
 test('price bands are replaced as a whole and kept in the given order', () => {
   const db = createTestDb()
   savePriceBands(db, [

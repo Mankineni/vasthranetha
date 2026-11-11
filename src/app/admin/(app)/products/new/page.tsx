@@ -39,7 +39,6 @@ export default async function NewProductPage({ searchParams }: Props) {
           initialValues={emptyForm(options.categories[0].id)}
           initialMedia={shared}
           batchId={batch && shared.length ? batch : randomUUID()}
-          submitToken={randomUUID()}
           rejected={Number.isInteger(rejected) && rejected > 0 ? rejected : 0}
           sharedId={sharedId}
           autofillEnabled={isAutofillEnabled()}

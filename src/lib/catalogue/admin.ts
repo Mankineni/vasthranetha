@@ -271,7 +271,20 @@ export function getAdminProduct(db: Db, id: number): AdminProduct | null {
   return row ? hydrate(db, [row])[0] : null
 }
 
-export function listAdminProducts(db: Db, f: { q?: string; status?: ProductStatus }): AdminProduct[] {
+export function countByStatus(db: Db): Record<ProductStatus | 'all', number> {
+  const rows = db.select({ status: products.status, n: sql<number>`count(*)` }).from(products).groupBy(products.status).all()
+  const counts = { all: 0, draft: 0, available: 0, sold: 0 }
+  for (const r of rows) {
+    counts[r.status] = r.n
+    counts.all += r.n
+  }
+  return counts
+}
+
+export function listAdminProducts(
+  db: Db,
+  f: { q?: string; status?: ProductStatus; limit?: number },
+): AdminProduct[] {
   const conds = []
   const q = f.q?.trim()
   if (q) {
@@ -284,6 +297,7 @@ export function listAdminProducts(db: Db, f: { q?: string; status?: ProductStatu
     .from(products)
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(products.createdAt), desc(products.id))
+    .limit(f.limit ?? -1)
     .all()
   return hydrate(db, rows)
 }

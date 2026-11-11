@@ -3,6 +3,7 @@ import { createTestDb } from '../helpers/db'
 import { makeCategories, makeInput, makeMediaRow, makeUser } from '../helpers/fixtures'
 import { media, products } from '@/db/schema'
 import {
+  countByStatus,
   createProduct,
   deleteProduct,
   duplicateProduct,
@@ -171,6 +172,13 @@ test('deleteProduct refuses while media are attached, then deletes', () => {
   db.delete(media).where(eq(media.id, m)).run()
   deleteProduct(db, p.id)
   expect(getAdminProduct(db, p.id)).toBeNull()
+})
+
+test('listAdminProducts returns at most `limit` rows, newest first, and counts every status', () => {
+  const { db, sarees, user } = setup()
+  for (let i = 0; i < 5; i++) createProduct(db, makeInput(sarees, { name: `P${i}` }), user, { publish: false, now: i })
+  expect(listAdminProducts(db, { limit: 2 }).map((p) => p.name)).toEqual(['P4', 'P3'])
+  expect(countByStatus(db)).toEqual({ all: 5, draft: 5, available: 0, sold: 0 })
 })
 
 test('listAdminProducts searches by code or name and filters by status, newest first', () => {

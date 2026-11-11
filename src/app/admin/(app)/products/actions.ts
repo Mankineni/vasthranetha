@@ -1,10 +1,12 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getDb } from '@/db/client'
 import { requireOwner } from '@/lib/auth/guard'
 import {
   createProduct,
+  duplicateProduct,
   getAdminProduct,
   ProductError,
   setStatus,
@@ -52,9 +54,39 @@ export async function saveProduct(_prev: SaveState, form: FormData): Promise<Sav
   redirect('/admin/products')
 }
 
+/** Deletes a product and its files; the list re-renders without it. */
 export async function removeProduct(id: number): Promise<void> {
   await requireOwner()
   if (!Number.isInteger(id)) return
   await deleteProductAndFiles(getDb(), id, mediaDirFromEnv())
-  redirect('/admin/products')
+  revalidatePath('/admin/products')
+}
+
+async function changeStatus(id: number, status: 'available' | 'sold'): Promise<{ error: string | null }> {
+  const owner = await requireOwner()
+  if (!Number.isInteger(id)) return { error: 'Unknown product.' }
+  try {
+    setStatus(getDb(), id, status, owner.id, Date.now())
+  } catch (err) {
+    if (err instanceof ProductError) return { error: err.message }
+    throw err
+  }
+  revalidatePath('/admin/products')
+  return { error: null }
+}
+
+export async function markSold(id: number) {
+  return changeStatus(id, 'sold')
+}
+
+export async function markAvailable(id: number) {
+  return changeStatus(id, 'available')
+}
+
+/** Copies a product (without photos) as a new draft and opens it. */
+export async function duplicate(id: number): Promise<void> {
+  const owner = await requireOwner()
+  if (!Number.isInteger(id)) return
+  const copy = duplicateProduct(getDb(), id, owner.id, Date.now())
+  redirect(`/admin/products/${copy.id}`)
 }

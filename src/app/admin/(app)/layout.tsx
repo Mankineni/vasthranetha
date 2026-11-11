@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getDb } from '@/db/client'
 import { requireOwner } from '@/lib/auth/guard'
 import { getSettings } from '@/lib/settings/settings'
+import { BottomNav } from '@/components/admin/BottomNav'
 
 export default async function AdminAppLayout({ children }: { children: React.ReactNode }) {
   const owner = await requireOwner()
@@ -27,6 +28,7 @@ export default async function AdminAppLayout({ children }: { children: React.Rea
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-5">{children}</main>
+      <BottomNav />
     </>
   )
 }

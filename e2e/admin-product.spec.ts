@@ -1,20 +1,10 @@
-import path from 'node:path'
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
-import { signInAsOwner } from './helpers'
+import { expect, test, type Page } from '@playwright/test'
+import { findPublic, fixture, signInAsOwner, uniqueName } from './helpers'
 
-const fixture = (name: string) => path.join(__dirname, '..', 'tests', 'fixtures', name)
 const BIG = fixture('big.jpg') // 2000×2600
 const SECOND = fixture('second.jpg') // 1600×2133
 const SMALL = fixture('small.jpg') // 800×1000, below the 1200 px warning limit
 const PDF = fixture('not-an-image.pdf')
-
-let n = 0
-const uniqueName = (base: string) => `${base} ${Date.now().toString(36)}${n++}`
-
-async function findPublic(request: APIRequestContext, name: string) {
-  const res = await request.get(`/api/products?q=${encodeURIComponent(name)}`)
-  return (await res.json()).items as { code: string; path: string; name: string; price: number }[]
-}
 
 async function waitForUploads(page: Page, count: number) {
   await expect(page.locator('[data-testid^="photo-"][data-status="done"]')).toHaveCount(count, { timeout: 30_000 })

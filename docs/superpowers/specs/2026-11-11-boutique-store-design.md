@@ -284,7 +284,7 @@ Product addresses have the form `/p/<code>-<name-slug>`, for example `/p/s-1042-
 
 - All `/admin` pages and admin API routes require an owner session.
 - Sign-in is limited to 5 failed attempts per login per 15 minutes.
-- Uploads: owners only; images (JPEG, PNG, WebP, HEIC) up to 25 MB each; video (MP4) up to 20 MB; file type checked from the file content, not the name.
+- Uploads: owners only; images (JPEG, PNG, WebP) up to 25 MB each; video (MP4) up to 20 MB; file type checked from the file content, not the name.
 - Dealer fields never appear in public pages, page data or API responses. An automated test checks this.
 - The server accepts web traffic only from Cloudflare.
 - Secrets (session key, API key) come from environment variables and are not stored in the repository.

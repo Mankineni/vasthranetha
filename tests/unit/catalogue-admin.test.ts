@@ -137,7 +137,9 @@ test('all fields round-trip, including occasions, sizes and dealer fields', () =
     notes: 'ask for HD photos',
   })
   const p = createProduct(db, input, user, { publish: false, now: 1 })
-  const { submitToken: _t, mediaIds: _m, ...expected } = input
+  const expected: Partial<typeof input> = { ...input }
+  delete expected.submitToken
+  delete expected.mediaIds
   expect(getAdminProduct(db, p.id)).toMatchObject(expected)
 })
 

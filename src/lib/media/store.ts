@@ -154,10 +154,8 @@ export async function purgeUnattached(db: Db, mediaDir: string, now: number): Pr
   return stale.length
 }
 
-export function mediaUrl(p: string): string {
-  return `/media/${p}`
-}
+export { mediaUrl } from './urls'
 
 export function mediaDirFromEnv(): string {
-  return path.resolve(process.env.MEDIA_DIR || './data/media')
+  return path.resolve(/*turbopackIgnore: true*/ process.env.MEDIA_DIR || './data/media')
 }

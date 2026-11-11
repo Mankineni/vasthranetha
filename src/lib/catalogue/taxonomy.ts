@@ -32,9 +32,16 @@ export function createCategory(db: Db, input: { name: string; codePrefix: string
   if (db.select().from(categories).where(eq(categories.slug, slug)).get()) {
     return { ok: false, error: `${input.name.trim()} already exists.` }
   }
+  // New categories go after the existing ones, so they appear in the order they were added.
+  const last = db.select({ p: sql<number | null>`max(${categories.position})` }).from(categories).get()
   const [row] = db
     .insert(categories)
-    .values({ name: input.name.trim(), slug, codePrefix: input.codePrefix.toUpperCase(), position: 0 })
+    .values({
+      name: input.name.trim(),
+      slug,
+      codePrefix: input.codePrefix.toUpperCase(),
+      position: (last?.p ?? -1) + 1,
+    })
     .returning()
     .all()
   return { ok: true, id: row.id }

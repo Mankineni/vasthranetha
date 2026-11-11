@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
+/* Brand look. Logo and colours are still open with the owners, so every
+   colour lives here as a variable and can be swapped in one place. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #fbf7f2;
+  --surface: #ffffff;
+  --ink: #2a1a1f;
+  --muted: #76666b;
+  --line: #e9dfd6;
+  --accent: #7a1f2b;
+  --accent-ink: #ffffff;
+  --accent-soft: #f4e6e3;
+  --gold: #b48a3c;
+  --whatsapp: #1fa855;
+  --danger: #b42318;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-whatsapp: var(--whatsapp);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-text);
+  --font-display: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-text), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+/* Horizontal chip rows scroll inside themselves, never the page. */
+.scroll-row {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

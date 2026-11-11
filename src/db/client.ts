@@ -9,12 +9,20 @@ export type Db = BetterSQLite3Database<typeof schema>
 /** A transaction handle; units that may run inside a transaction accept `Db | Tx`. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
 
+const connections = new WeakMap<Db, Database.Database>()
+
 export function openDb(file: string): Db {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true })
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(/*turbopackIgnore: true*/ file)), { recursive: true })
   const sqlite = new Database(file)
   sqlite.pragma('foreign_keys = ON')
   if (file !== ':memory:') sqlite.pragma('journal_mode = WAL')
-  return drizzle(sqlite, { schema })
+  const db = drizzle(sqlite, { schema })
+  connections.set(db, sqlite)
+  return db
+}
+
+export function closeDb(db: Db): void {
+  connections.get(db)?.close()
 }
 
 const globalForDb = globalThis as unknown as { __boutiqueDb?: Db }

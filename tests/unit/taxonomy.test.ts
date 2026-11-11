@@ -16,16 +16,17 @@ import {
 } from '@/lib/catalogue/taxonomy'
 import { createProduct } from '@/lib/catalogue/admin'
 
-test('categories are created with slug and upper-case prefix, listed by position then name', () => {
+test('categories are created with slug and upper-case prefix, listed in the order they were added', () => {
   const db = createTestDb()
   createCategory(db, { name: 'Sarees', codePrefix: 's' })
   createCategory(db, { name: 'Dresses', codePrefix: 'D' })
+  createCategory(db, { name: 'Accessories', codePrefix: 'A' })
   const rows = listCategories(db)
-  expect(rows.map((c) => c.name)).toEqual(['Dresses', 'Sarees'])
-  expect(rows.find((c) => c.name === 'Sarees')).toMatchObject({ slug: 'sarees', codePrefix: 'S' })
-  const sarees = rows.find((c) => c.name === 'Sarees')!
-  updateCategory(db, sarees.id, { position: -1 })
-  expect(listCategories(db)[0].name).toBe('Sarees')
+  expect(rows.map((c) => c.name)).toEqual(['Sarees', 'Dresses', 'Accessories'])
+  expect(rows[0]).toMatchObject({ slug: 'sarees', codePrefix: 'S' })
+  const accessories = rows[2]
+  updateCategory(db, accessories.id, { position: -1 })
+  expect(listCategories(db)[0].name).toBe('Accessories')
 })
 
 test.each(['', '1', 'ABCD', 'S1'])('category prefix %s is rejected', (prefix) => {

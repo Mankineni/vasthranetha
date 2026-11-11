@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "seed": "tsx scripts/seed.ts",
     "create-owner": "tsx scripts/create-owner.ts",
-    "purge-uploads": "tsx scripts/purge-uploads.ts"
+    "purge-uploads": "tsx scripts/purge-uploads.ts",
+    "e2e": "tsx scripts/e2e-prepare.ts && playwright test"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
@@ -24,6 +25,7 @@
     "sharp": "^0.35.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.20.5",
